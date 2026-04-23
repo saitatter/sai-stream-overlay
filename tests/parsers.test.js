@@ -26,6 +26,46 @@ describe("parseChatEvent", () => {
     };
     expect(parseChatEvent(packet)).toBeNull();
   });
+
+  it("parses youtube structured runs with emoji", () => {
+    const packet = {
+      event: { source: "YouTube" },
+      data: {
+        user: { name: "Bob" },
+        message: {
+          runs: [{ text: "Salut " }, { emoji: { shortcuts: ["😀"] } }, { text: " chat" }],
+        },
+      },
+    };
+
+    expect(parseChatEvent(packet)).toEqual({
+      user: "Bob",
+      message: "Salut 😀 chat",
+      platform: "youtube",
+      badges: [],
+    });
+  });
+
+  it("parses twitch structured fragments with emoji alt text", () => {
+    const packet = {
+      event: { source: "Twitch" },
+      data: {
+        user: { name: "Alice" },
+        message: {
+          message: {
+            fragments: [{ text: "GG " }, { emoji: { alt: "🔥" } }],
+          },
+        },
+      },
+    };
+
+    expect(parseChatEvent(packet)).toEqual({
+      user: "Alice",
+      message: "GG 🔥",
+      platform: "twitch",
+      badges: [],
+    });
+  });
 });
 
 describe("parseModerationChatEvent", () => {
@@ -68,6 +108,8 @@ describe("parseModerationChatEvent", () => {
 
   it("drops unsupported moderation payloads safely", () => {
     expect(parseModerationChatEvent({ type: "donation.received" })).toBeNull();
-    expect(parseModerationChatEvent({ eventType: "overlay.message", username: "NoText" })).toBeNull();
+    expect(
+      parseModerationChatEvent({ eventType: "overlay.message", username: "NoText" }),
+    ).toBeNull();
   });
 });

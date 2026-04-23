@@ -8,7 +8,60 @@
 
 function asDisplayString(value) {
   if (value == null) return "";
-  return String(value);
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return "";
+}
+
+function getEmojiFromNode(node) {
+  if (!node || typeof node !== "object") return "";
+
+  if (typeof node.text === "string") return node.text;
+  if (typeof node.alt === "string") return node.alt;
+  if (typeof node.name === "string") return node.name;
+
+  if (Array.isArray(node.shortcuts) && typeof node.shortcuts[0] === "string") {
+    return node.shortcuts[0];
+  }
+
+  if (node.emoji) return getEmojiFromNode(node.emoji);
+  return "";
+}
+
+function flattenMessageNode(value) {
+  if (value == null) return "";
+
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => flattenMessageNode(entry)).join("");
+  }
+
+  if (typeof value !== "object") return "";
+
+  const text = asDisplayString(value.text);
+  if (text) return text;
+
+  const alt = asDisplayString(value.alt);
+  if (alt) return alt;
+
+  if (Array.isArray(value.runs)) return flattenMessageNode(value.runs);
+  if (Array.isArray(value.fragments)) return flattenMessageNode(value.fragments);
+  if (Array.isArray(value.parts)) return flattenMessageNode(value.parts);
+  if (Array.isArray(value.messageParts)) return flattenMessageNode(value.messageParts);
+
+  if (value.emoji) return getEmojiFromNode(value.emoji);
+
+  return "";
+}
+
+function getMessageText(value) {
+  const flattened = flattenMessageNode(value);
+  if (flattened) return flattened;
+  return asDisplayString(value);
 }
 
 function getBadges(packet) {
@@ -27,7 +80,7 @@ function parseTwitchEvent(packet) {
 
   return {
     user: asDisplayString(packet.data.user.name),
-    message: asDisplayString(packet.data.message.message),
+    message: getMessageText(packet.data.message.message),
     platform: "twitch",
     badges: getBadges(packet),
   };
@@ -42,7 +95,7 @@ function parseYouTubeEvent(packet) {
 
   return {
     user: asDisplayString(packet.data.user.name),
-    message: asDisplayString(packet.data.message),
+    message: getMessageText(packet.data.message),
     platform: "youtube",
     badges: getBadges(packet),
   };

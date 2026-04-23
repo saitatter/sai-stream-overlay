@@ -5,7 +5,7 @@
 
 body {
   background: transparent;
-  font-family: "Poppins", sans-serif;
+  font-family: "Poppins", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
   margin: 0;
   padding: 0;
 }
@@ -22,7 +22,14 @@ body {
   justify-content: flex-start;
   position: relative;
   height: 40px;
-  font-family: var(--chat-font-family, "Poppins", sans-serif);
+  font-family: var(
+    --chat-font-family,
+    "Poppins",
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    "Noto Color Emoji",
+    sans-serif
+  );
 }
 
 .msg {
@@ -36,7 +43,14 @@ body {
   transform: translateX(100%);
   transition: transform calc(var(--msg-shift-ms, 500) * 1ms) ease;
   position: relative;
-  font-family: var(--chat-font-family, "Poppins", sans-serif);
+  font-family: var(
+    --chat-font-family,
+    "Poppins",
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    "Noto Color Emoji",
+    sans-serif
+  );
   will-change: transform, opacity;
 }
 

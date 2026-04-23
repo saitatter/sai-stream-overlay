@@ -14,7 +14,10 @@ function loadGoogleFont(fontName) {
 
 function setFont(fontName) {
   loadGoogleFont(fontName);
-  document.documentElement.style.setProperty("--chat-font-family", `'${fontName}', sans-serif`);
+  document.documentElement.style.setProperty(
+    "--chat-font-family",
+    `'${fontName}', "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`,
+  );
 }
 
 export function setupSettings(dom) {
