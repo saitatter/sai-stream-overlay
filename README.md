@@ -106,9 +106,9 @@ docker pull ghcr.io/saitatter/sai-chat-overlay:1.0.3
 
 ## 🔄 Releases
 
-Uses **semantic-release**.  
-A release is created only when the commit message contains `release!`.  
-All commits since the last tag are included in that release.
+Uses **semantic-release** with Conventional Commits.  
+On every push to `main`, CI checks if a new version should be published.  
+If no `feat`/`fix`/`perf`/`refactor` (or breaking change) is detected, no release is created.
 
 - Use Conventional Commits: `feat: ...`, `fix: ...`, `perf: ...`, `refactor: ...`
 - Breaking changes:  
