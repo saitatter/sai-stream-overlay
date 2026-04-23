@@ -57,7 +57,9 @@ http://localhost:8080/?edit=false&twitchColor=%239146FF&youtubeColor=%23FF0000&m
 | `msgBgOpacity` | 0–1     | `0.6`               | `0.8`                       | Final bg: `rgba(color, opacity)` |
 | `fadeTime`     | seconds | `8`                 | `12`                        | Message lifetime |
 | `fontFamily`   | string  | `Poppins`           | `Roboto`                    | Must exist in the internal Google Fonts list |
-| `wsUrl`        | ws/wss  | `ws://localhost:8080` | `ws://127.0.0.1:8080`      | Streamer.bot WebSocket endpoint |
+| `wsUrl`        | ws/wss  | `ws://localhost:8080` | `ws://127.0.0.1:8080`      | Runtime endpoint; not included by Copy URL |
+| `maxMessages`  | number  | `10`                | `15`                        | Max visible chat bubbles (1..50) |
+| `debug`        | bool    | `false`             | `true`                      | Enables verbose debug logging/metrics |
 
 ---
 
@@ -86,6 +88,18 @@ serve -l 8080 .
 
 Then open:  
 `http://localhost:8080/?edit=true`
+
+---
+
+## 🧱 Architecture
+
+- `overlay/script.js`: app orchestration (wires modules together).
+- `overlay/js/settings.js`: URL/UI settings handling and share-link generation.
+- `overlay/js/websocket.js`: Streamer.bot socket client, reconnect/backoff, status, metrics.
+- `overlay/js/parsers.js`: platform-specific payload parsing and normalization.
+- `overlay/js/chat.js`: message queue, dedupe window, DOM rendering, overflow compaction.
+- `overlay/js/animations.js`: coordinated remove/shift animations.
+- `overlay/js/config.js`: runtime config parsing (`wsUrl`, `maxMessages`, `debug`).
 
 ---
 
@@ -125,6 +139,8 @@ If no `feat`/`fix`/`perf`/`refactor` (or breaking change) is detected, no releas
 
 - **Blank overlay in OBS** — Check URL and that container is reachable.
 - **No messages appear** — Verify Streamer.bot is running and WS URL matches.
+- **`WS: reconnecting` persists** — Check Streamer.bot WebSocket host/port, firewall rules, and whether OBS/container can reach that endpoint.
+- **Need more WS diagnostics** — Add `&debug=true` to the overlay URL and inspect browser console logs.
 - **Fonts not applying** — Ensure family is in allowlist and Google Fonts is reachable.
 - **Multiple `latest` entries in GHCR** — CI publishes single-platform `latest` and multi-arch only for version tags.
 
