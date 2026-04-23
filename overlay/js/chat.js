@@ -30,13 +30,11 @@ function getEnterDurationMs() {
 
 export function createChatController(chat, getFadeTimeMs, options = {}) {
   const maxMessages = options.maxMessages || CHAT_DEFAULTS.maxMessages;
-  const dedupeWindowMs = options.dedupeWindowMs || CHAT_DEFAULTS.dedupeWindowMs;
   const burstPerFrame = options.burstPerFrame || CHAT_DEFAULTS.burstPerFrame;
 
   let isCompacting = false;
   let flushScheduled = false;
   const pendingMessages = [];
-  const recentMessageKeys = new Map();
 
   function compactOverflow() {
     if (isCompacting) return;
@@ -53,19 +51,6 @@ export function createChatController(chat, getFadeTimeMs, options = {}) {
       isCompacting = false;
       if (chat.children.length > maxMessages) compactOverflow();
     });
-  }
-
-  function isDuplicate(entry) {
-    const now = Date.now();
-    const key = `${entry.platform}|${entry.user}|${entry.message}`;
-    const lastSeen = recentMessageKeys.get(key);
-    if (typeof lastSeen === "number" && now - lastSeen <= dedupeWindowMs) return true;
-    recentMessageKeys.set(key, now);
-
-    for (const [existingKey, ts] of recentMessageKeys.entries()) {
-      if (now - ts > dedupeWindowMs * 2) recentMessageKeys.delete(existingKey);
-    }
-    return false;
   }
 
   function renderMessage(user, message, platform, badges) {
@@ -108,9 +93,7 @@ export function createChatController(chat, getFadeTimeMs, options = {}) {
   }
 
   function addMessage(user, message, platform, badges) {
-    const entry = { user, message, platform, badges };
-    if (isDuplicate(entry)) return;
-    pendingMessages.push(entry);
+    pendingMessages.push({ user, message, platform, badges });
     scheduleFlush();
   }
 

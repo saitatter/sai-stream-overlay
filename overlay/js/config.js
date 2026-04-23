@@ -44,7 +44,6 @@ export function getRuntimeConfig() {
         Number.isFinite(maxMessages) && maxMessages >= 1 && maxMessages <= 50
           ? maxMessages
           : CHAT_DEFAULTS.maxMessages,
-      dedupeWindowMs: CHAT_DEFAULTS.dedupeWindowMs,
       burstPerFrame: CHAT_DEFAULTS.burstPerFrame,
     },
   };

@@ -24,11 +24,6 @@ export const DEFAULTS = {
 export const GAP_PX = 10;
 export const ANIM_MS = 500;
 export const MAX_MESSAGES = 10;
-export const MESSAGE_LIMITS = {
-  maxUserNameChars: 40,
-  maxMessageChars: 350,
-  maxBadges: 6,
-};
 
 export const WEBSOCKET_DEFAULTS = {
   reconnectInitialDelayMs: 1000,
@@ -40,6 +35,5 @@ export const WEBSOCKET_DEFAULTS = {
 
 export const CHAT_DEFAULTS = {
   maxMessages: MAX_MESSAGES,
-  dedupeWindowMs: 1500,
   burstPerFrame: 3,
 };

@@ -96,8 +96,8 @@ Then open:
 - `overlay/script.js`: app orchestration (wires modules together).
 - `overlay/js/settings.js`: URL/UI settings handling and share-link generation.
 - `overlay/js/websocket.js`: Streamer.bot socket client, reconnect/backoff, status, metrics.
-- `overlay/js/parsers.js`: platform-specific payload parsing and normalization.
-- `overlay/js/chat.js`: message queue, dedupe window, DOM rendering, overflow compaction.
+- `overlay/js/parsers.js`: platform-specific payload extraction with minimal shape checks.
+- `overlay/js/chat.js`: message queue, DOM rendering, overflow compaction.
 - `overlay/js/animations.js`: coordinated remove/shift animations.
 - `overlay/js/config.js`: runtime config parsing (`wsUrl`, `maxMessages`, `debug`).
 
