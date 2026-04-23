@@ -17,7 +17,7 @@ function setFont(fontName) {
   document.documentElement.style.setProperty("--chat-font-family", `'${fontName}', sans-serif`);
 }
 
-export function setupSettings(dom, options = {}) {
+export function setupSettings(dom) {
   const params = new URLSearchParams(window.location.search);
   const isEdit = (params.get("edit") || "false").toLowerCase() === "true";
   let fadeTimeMs = safeNumber(DEFAULTS.fadeTime, 10) * 1000;
@@ -84,9 +84,6 @@ export function setupSettings(dom, options = {}) {
       fadeTime: dom.fadeTimeInput.value,
       fontFamily: dom.fontSelect.value,
     });
-    const wsUrlFromParams = params.get("wsUrl") || params.get("streamerbotWsUrl");
-    const wsUrl = options.wsUrl || wsUrlFromParams;
-    if (wsUrl && wsUrl !== DEFAULTS.wsUrl) urlParams.set("wsUrl", wsUrl);
     const finalUrl = `${baseUrl}?${urlParams.toString()}`;
 
     navigator.clipboard
