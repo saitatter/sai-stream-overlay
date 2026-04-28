@@ -405,7 +405,14 @@ function createRenderer(canvas, logger) {
   };
 }
 
-function createSceneController(dom, renderer, instance, assetBase, logger, emitStatus = () => {}) {
+export function createSceneController(
+  dom,
+  renderer,
+  instance,
+  assetBase,
+  logger,
+  emitStatus = () => {},
+) {
   let currentScene = { ...IDLE_SCENE };
   let countdownTimer = null;
   let sceneQueue = Promise.resolve();
@@ -441,7 +448,7 @@ function createSceneController(dom, renderer, instance, assetBase, logger, emitS
             sceneKey,
           };
 
-    currentScene = {
+    const nextCurrentScene = {
       ...baseScene,
       ...nextScene,
       sceneKey,
@@ -466,6 +473,7 @@ function createSceneController(dom, renderer, instance, assetBase, logger, emitS
           shaderSource: fragmentShader.sourceType,
         }),
       );
+      return;
     } else if (!shaderResult.unchanged) {
       emitStatus(
         createSceneStatusEvent({
@@ -477,6 +485,8 @@ function createSceneController(dom, renderer, instance, assetBase, logger, emitS
         }),
       );
     }
+
+    currentScene = nextCurrentScene;
     const isIdle = currentScene.sceneKey === "idle";
     dom.content.classList.toggle("scene-idle", isIdle);
     dom.canvas.classList.toggle("scene-idle", isIdle);
