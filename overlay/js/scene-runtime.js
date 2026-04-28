@@ -194,7 +194,6 @@ export function createSceneStatusEvent({
       instance,
     },
     payload: {
-      instance,
       sceneKey,
       lifecycle,
       severity,

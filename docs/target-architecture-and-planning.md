@@ -565,7 +565,6 @@ or OBS browser tooling can observe the same contract.
     "instance": "main"
   },
   "payload": {
-    "instance": "main",
     "sceneKey": "starting-soon",
     "lifecycle": "compile-error",
     "severity": "error",
