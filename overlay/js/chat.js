@@ -54,7 +54,9 @@ function getEnterDurationMs() {
 export function createChatController(chat, getFadeTimeMs, options = {}) {
   const maxMessages = options.maxMessages || CHAT_DEFAULTS.maxMessages;
   const burstPerFrame = options.burstPerFrame || CHAT_DEFAULTS.burstPerFrame;
-  const emoteCache = createEmoteCache(options.maxCachedEmotes || CHAT_DEFAULTS.maxCachedEmotes || 256);
+  const emoteCache = createEmoteCache(
+    options.maxCachedEmotes || CHAT_DEFAULTS.maxCachedEmotes || 256,
+  );
 
   let isCompacting = false;
   let flushScheduled = false;

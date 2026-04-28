@@ -226,6 +226,41 @@ describe("parseModerationChatEvent", () => {
       message: "Hello from moderation",
       platform: "youtube",
       badges: ["https://example.com/member.png"],
+      segments: [{ type: "text", text: "Hello from moderation" }],
+    });
+  });
+
+  it("preserves normalized moderation message segments", () => {
+    const packet = {
+      type: "chat.message",
+      source: "twitch",
+      actor: { displayName: "Alice" },
+      payload: {
+        message: "GG Party",
+        segments: [
+          { type: "text", text: "GG " },
+          {
+            type: "emote",
+            url: "https://cdn.example.com/emotes/party.png",
+            alt: "Party",
+          },
+        ],
+      },
+    };
+
+    expect(parseModerationChatEvent(packet)).toEqual({
+      user: "Alice",
+      message: "GG Party",
+      platform: "twitch",
+      badges: [],
+      segments: [
+        { type: "text", text: "GG " },
+        {
+          type: "emote",
+          url: "https://cdn.example.com/emotes/party.png",
+          alt: "Party",
+        },
+      ],
     });
   });
 
@@ -242,6 +277,36 @@ describe("parseModerationChatEvent", () => {
       message: "Approved legacy event",
       platform: "twitch",
       badges: [],
+      segments: [{ type: "text", text: "Approved legacy event" }],
+    });
+  });
+
+  it("ignores unsafe image URLs in structured payloads", () => {
+    const packet = {
+      event: { source: "Twitch" },
+      data: {
+        user: { name: "Mallory", badges: [{ imageUrl: "javascript:alert(1)" }] },
+        message: {
+          message: {
+            fragments: [
+              {
+                emote: {
+                  name: "Bad",
+                  imageUrl: "javascript:alert(1)",
+                },
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    expect(parseChatEvent(packet)).toEqual({
+      user: "Mallory",
+      message: "Bad",
+      platform: "twitch",
+      badges: [],
+      segments: [{ type: "text", text: "Bad" }],
     });
   });
 

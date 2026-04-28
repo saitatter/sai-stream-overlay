@@ -32,6 +32,20 @@ function asDisplayString(value) {
   return "";
 }
 
+function asImageUrl(value) {
+  const url = asDisplayString(value).trim();
+  if (!url) return "";
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") return parsed.href;
+  } catch {
+    return "";
+  }
+
+  return "";
+}
+
 function getEmojiFromNode(node) {
   if (!node || typeof node !== "object") return "";
 
@@ -52,14 +66,16 @@ function getImageUrlFromNode(node) {
 
   const direct =
     asDisplayString(node.imageUrl) || asDisplayString(node.url) || asDisplayString(node.src);
-  if (direct) return direct;
+  const safeDirect = asImageUrl(direct);
+  if (safeDirect) return safeDirect;
 
   if (node.image && typeof node.image === "object") {
     const fromImage =
       asDisplayString(node.image.url) ||
       asDisplayString(node.image.src) ||
       asDisplayString(node.image.imageUrl);
-    if (fromImage) return fromImage;
+    const safeImageUrl = asImageUrl(fromImage);
+    if (safeImageUrl) return safeImageUrl;
   }
 
   const variants = Array.isArray(node.images)
@@ -74,7 +90,8 @@ function getImageUrlFromNode(node) {
         asDisplayString(variant?.src) ||
         asDisplayString(variant?.imageUrl) ||
         (typeof variant === "string" ? variant : "");
-      if (candidate) return candidate;
+      const safeCandidate = asImageUrl(candidate);
+      if (safeCandidate) return safeCandidate;
     }
   }
 
@@ -214,7 +231,10 @@ function appendSegments(segments, value) {
 
   if (tryPushEmoteFromNode(segments, value)) return;
 
-  const text = asDisplayString(value.text) || asDisplayString(value.alt) || getEmojiFromNode(value);
+  const text =
+    asDisplayString(value.text) ||
+    asDisplayString(value.alt) ||
+    getEmojiFromNode(value.emote || value.emoji || value.sticker || value);
   if (text) pushTextSegment(segments, text);
 }
 
@@ -236,9 +256,7 @@ function getMessageText(segments) {
 
 function getBadges(packet) {
   if (!Array.isArray(packet?.data?.user?.badges)) return [];
-  return packet.data.user.badges
-    .map((badge) => badge?.imageUrl)
-    .filter((url) => typeof url === "string");
+  return packet.data.user.badges.map((badge) => asImageUrl(badge?.imageUrl)).filter(Boolean);
 }
 
 /**
@@ -280,10 +298,10 @@ function getNormalizedBadges(packet) {
   if (!Array.isArray(badges)) return [];
   return badges
     .map((badge) => {
-      if (typeof badge === "string") return badge;
-      return badge?.imageUrl;
+      if (typeof badge === "string") return asImageUrl(badge);
+      return asImageUrl(badge?.imageUrl);
     })
-    .filter((url) => typeof url === "string");
+    .filter(Boolean);
 }
 
 function normalizePlatform(value) {
@@ -301,23 +319,27 @@ export function parseModerationChatEvent(packet) {
     const user = packet?.actor?.displayName ?? packet?.actor?.name;
     const message = packet?.payload?.message;
     if (user == null || message == null) return null;
+    const segments = getMessageSegments(packet?.payload?.segments || message);
 
     return {
       user: asDisplayString(user),
-      message: asDisplayString(message),
+      message: getMessageText(segments),
       platform: normalizePlatform(packet.source),
       badges: getNormalizedBadges(packet),
+      segments,
     };
   }
 
   if (packet?.eventType === "overlay.message") {
     if (packet?.username == null || packet?.text == null) return null;
+    const segments = getMessageSegments(packet.segments || packet.text);
 
     return {
       user: asDisplayString(packet.username),
-      message: asDisplayString(packet.text),
+      message: getMessageText(segments),
       platform: normalizePlatform(packet.platform),
       badges: [],
+      segments,
     };
   }
 
