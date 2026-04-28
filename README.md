@@ -26,6 +26,7 @@ _(Add a short demo gif here for instant context)_
 - 🔖 Badges rendering for users
 - 🔌 Streamer.bot integration (Twitch `ChatMessage`, YouTube `Message`)
 - 🎬 Scene overlay runtime with versioned manifests and WebGL shader presets
+- 🚨 Alert overlay runtime for donations and generic alert events
 - 🔁 Auto-reconnect with exponential backoff if WebSocket disconnects
 - 🐳 Docker image on GHCR (`latest` for amd64, version tags are multi-arch)
 
@@ -70,6 +71,23 @@ http://localhost:8080/overlay/scene.html?instance=main&overlayWsUrl=ws%3A%2F%2Fl
 ```
 
 Use `&demo=true` to preview the shader scene without the moderation backend.
+
+### Alert overlay mode
+
+Alert overlays use a separate OBS Browser Source page for donation and generic
+alert events:
+
+```text
+http://localhost:8080/overlay/alert.html?overlayWsUrl=ws%3A%2F%2Flocalhost%3A8787%2Fws%3Fchannel%3Doverlay
+```
+
+Use `&demo=true` to preview the alert card without a backend. The runtime
+handles:
+
+- `donation.received`
+- `alert.begin`
+- `alert.update`
+- `alert.end`
 
 Scene events are consumed from the overlay WebSocket channel:
 

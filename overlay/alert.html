@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Alert Overlay</title>
+    <link rel="stylesheet" href="alert.css" />
+  </head>
+  <body>
+    <main id="alertRoot" class="alert-root alert-idle">
+      <div class="alert-shell">
+        <div id="alertKicker" class="alert-kicker"></div>
+        <h1 id="alertTitle"></h1>
+        <p id="alertMessage"></p>
+        <div id="alertMeta" class="alert-meta"></div>
+      </div>
+    </main>
+    <div id="alertStatus" class="alert-status">Alert: idle</div>
+    <script type="module" src="js/alert-runtime.js"></script>
+  </body>
+</html>
