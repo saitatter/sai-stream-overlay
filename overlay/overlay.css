@@ -1,0 +1,73 @@
+:root {
+  --overlay-status-bg: rgba(5, 8, 18, 0.72);
+  --overlay-status-text: rgba(248, 251, 255, 0.82);
+  --overlay-debug-accent: #00d1ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+  font-family: Inter, "Segoe UI", sans-serif;
+}
+
+.overlay-root {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity 160ms ease;
+}
+
+.overlay-idle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.overlay-node {
+  position: absolute;
+  display: grid;
+  align-content: center;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.overlay-node-label {
+  padding: 0.16em 0.28em;
+  text-overflow: ellipsis;
+}
+
+.overlay-node-panel {
+  color: transparent;
+}
+
+.overlay-node-shader {
+  color: transparent;
+}
+
+.overlay-status {
+  position: fixed;
+  right: 12px;
+  bottom: 10px;
+  z-index: 10;
+  display: none;
+  max-width: min(520px, calc(100vw - 24px));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: var(--overlay-status-bg);
+  color: var(--overlay-status-text);
+  padding: 7px 9px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.overlay-debug .overlay-status {
+  display: block;
+}

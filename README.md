@@ -27,6 +27,7 @@ _(Add a short demo gif here for instant context)_
 - 🔌 Streamer.bot integration (Twitch `ChatMessage`, YouTube `Message`)
 - 🎬 Scene overlay runtime with versioned manifests and WebGL shader presets
 - 🚨 Alert overlay runtime for donations and generic alert events
+- 🧩 Resource overlay runtime for WYSIWYG labels and panels from SAI Showrunner
 - 🔁 Auto-reconnect with exponential backoff if WebSocket disconnects
 - 🐳 Docker image on GHCR (`latest` for amd64, version tags are multi-arch)
 
@@ -88,6 +89,63 @@ handles:
 - `alert.begin`
 - `alert.update`
 - `alert.end`
+
+### Resource overlay mode
+
+Resource overlays render WYSIWYG labels and panels created in SAI Showrunner's
+Overlay Studio:
+
+```text
+http://localhost:8080/overlay/overlay.html?instance=main&overlayWsUrl=ws%3A%2F%2Flocalhost%3A8787%2Fws%3Fchannel%3Doverlay
+```
+
+Use `&demo=true` to preview a sample lower-third without a backend. The runtime
+handles:
+
+- `overlay.resource.updated`
+
+Example:
+
+```json
+{
+  "type": "overlay.resource.updated",
+  "target": {
+    "instance": "main"
+  },
+  "payload": {
+    "overlayKey": "main-alerts",
+    "resource": {
+      "key": "main-alerts",
+      "name": "Main Alerts",
+      "target": {
+        "instance": "main"
+      },
+      "size": {
+        "width": 1920,
+        "height": 1080
+      },
+      "nodes": [
+        {
+          "id": "latest-follower-label",
+          "type": "label",
+          "text": "Latest follower",
+          "binding": "platform.twitch.latestFollower.displayName",
+          "x": 96,
+          "y": 820,
+          "width": 520,
+          "height": 72,
+          "style": {
+            "fontSize": 42,
+            "color": "#ffffff",
+            "backgroundColor": "#000000",
+            "opacity": 0
+          }
+        }
+      ]
+    }
+  }
+}
+```
 
 Scene events are consumed from the overlay WebSocket channel:
 
@@ -185,6 +243,8 @@ Then open:
 - `overlay/js/chat.js`: message queue, DOM rendering, overflow compaction.
 - `overlay/js/animations.js`: coordinated remove/shift animations.
 - `overlay/js/config.js`: runtime config parsing (`wsUrl`, `maxMessages`, `debug`).
+- `overlay/overlay.html`: WYSIWYG resource overlay entrypoint.
+- `overlay/js/overlay-runtime.js`: Overlay Studio resource renderer.
 - `overlay/scene.html`: scene overlay entrypoint.
 - `overlay/js/scene-runtime.js`: scene event client, scene definition loader, and WebGL runtime.
 - `overlay/scenes/*`: versioned scene manifests and shader assets.
