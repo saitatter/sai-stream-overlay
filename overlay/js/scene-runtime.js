@@ -178,6 +178,7 @@ function createRenderer(canvas, logger) {
     return {
       setFragmentShader() {},
       setParameters() {},
+      setActive() {},
       start() {},
     };
   }
@@ -188,6 +189,8 @@ function createRenderer(canvas, logger) {
   let locations = getLocations();
 
   let startedAt = performance.now();
+  let animationFrameId = null;
+  let isActive = false;
   let parameters = {
     accentColor: "#9146FF",
     secondaryColor: "#00D1FF",
@@ -248,7 +251,9 @@ function createRenderer(canvas, logger) {
     gl.uniform1f(locations.intensity, Number(parameters.intensity ?? 0.8));
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-    requestAnimationFrame(render);
+    if (isActive) {
+      animationFrameId = requestAnimationFrame(render);
+    }
   }
 
   return {
@@ -268,8 +273,20 @@ function createRenderer(canvas, logger) {
     setParameters(nextParameters = {}) {
       parameters = { ...parameters, ...nextParameters };
     },
+    setActive(nextActive) {
+      if (nextActive === isActive) return;
+      isActive = nextActive;
+
+      if (isActive) {
+        startedAt = performance.now();
+        animationFrameId = requestAnimationFrame(render);
+      } else if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
+    },
     start() {
-      requestAnimationFrame(render);
+      if (isActive) requestAnimationFrame(render);
     },
   };
 }
@@ -325,6 +342,7 @@ function createSceneController(dom, renderer, instance, assetBase, logger) {
     const isIdle = currentScene.sceneKey === "idle";
     dom.content.classList.toggle("scene-idle", isIdle);
     dom.canvas.classList.toggle("scene-idle", isIdle);
+    renderer.setActive(!isIdle);
     dom.kicker.textContent = currentScene.kicker || currentScene.sceneKey || "";
     dom.title.textContent = currentScene.title || "";
     dom.subtitle.textContent = currentScene.subtitle || "";
@@ -349,6 +367,7 @@ function createSceneController(dom, renderer, instance, assetBase, logger) {
       .catch((error) => {
         logger.warn("Scene update failed.", error);
       });
+    return sceneQueue;
   }
 
   function handleEvent(packet) {
@@ -369,7 +388,7 @@ function createSceneController(dom, renderer, instance, assetBase, logger) {
 
   return {
     handleEvent,
-    setScene,
+    setScene: enqueueSceneUpdate,
   };
 }
 
