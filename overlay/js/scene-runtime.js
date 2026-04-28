@@ -2,6 +2,7 @@ import { createLogger } from "./logger.js";
 
 const DEFAULT_OVERLAY_WS_URL = "ws://localhost:8787/ws?channel=overlay";
 const DEFAULT_SCENE_API_URL = "http://localhost:8787";
+const DEFAULT_SCENE_ASSET_BASE = "scenes";
 const IDLE_SCENE = {
   sceneKey: "idle",
   title: "",
@@ -51,6 +52,7 @@ void main() {
   gl_FragColor = vec4(color, max(0.0, vignette));
 }
 `;
+const sceneDefinitionCache = new Map();
 
 function readFlag(params, name) {
   const value = params.get(name);
@@ -90,15 +92,63 @@ function createShader(gl, type, source) {
   return shader;
 }
 
-function createProgram(gl) {
+function createProgram(gl, fragmentSource = fragmentShaderSource) {
   const program = gl.createProgram();
   gl.attachShader(program, createShader(gl, gl.VERTEX_SHADER, vertexShaderSource));
-  gl.attachShader(program, createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource));
+  gl.attachShader(program, createShader(gl, gl.FRAGMENT_SHADER, fragmentSource));
   gl.linkProgram(program);
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
     throw new Error(gl.getProgramInfoLog(program) || "Shader linking failed");
   }
   return program;
+}
+
+function sanitizeSceneKey(value) {
+  const normalized = String(value || "idle")
+    .trim()
+    .toLowerCase();
+  return /^[a-z0-9_-]{1,64}$/.test(normalized) ? normalized : "idle";
+}
+
+async function readText(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Failed to load ${url}`);
+  return response.text();
+}
+
+async function loadSceneDefinition(sceneKey, assetBase, logger) {
+  const key = sanitizeSceneKey(sceneKey);
+  if (key === "idle") return null;
+  if (sceneDefinitionCache.has(key)) return sceneDefinitionCache.get(key);
+
+  const definitionPromise = (async () => {
+    const basePath = `${assetBase.replace(/\/$/, "")}/${key}`;
+    const manifestResponse = await fetch(`${basePath}/scene.json`);
+    if (!manifestResponse.ok) throw new Error(`Scene manifest not found: ${key}`);
+    const manifest = await manifestResponse.json();
+    const fragmentShader = manifest.fragmentShader
+      ? await readText(`${basePath}/${manifest.fragmentShader}`)
+      : fragmentShaderSource;
+
+    return {
+      key,
+      manifest,
+      fragmentShader,
+    };
+  })().catch((error) => {
+    sceneDefinitionCache.delete(key);
+    logger.warn(`Falling back to built-in shader for scene "${key}".`, error);
+    return {
+      key,
+      manifest: {
+        defaults: {},
+      },
+      fragmentShader: fragmentShaderSource,
+    };
+  });
+
+  sceneDefinitionCache.set(key, definitionPromise);
+  return definitionPromise;
 }
 
 function createRenderer(canvas, logger) {
@@ -116,16 +166,10 @@ function createRenderer(canvas, logger) {
     };
   }
 
-  const program = createProgram(gl);
+  let program = createProgram(gl);
   const positionBuffer = gl.createBuffer();
-  const locations = {
-    position: gl.getAttribLocation(program, "a_position"),
-    resolution: gl.getUniformLocation(program, "u_resolution"),
-    time: gl.getUniformLocation(program, "u_time"),
-    accentColor: gl.getUniformLocation(program, "u_accentColor"),
-    secondaryColor: gl.getUniformLocation(program, "u_secondaryColor"),
-    intensity: gl.getUniformLocation(program, "u_intensity"),
-  };
+  let activeFragmentSource = fragmentShaderSource;
+  let locations = getLocations();
 
   let startedAt = performance.now();
   let parameters = {
@@ -140,6 +184,17 @@ function createRenderer(canvas, logger) {
     new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),
     gl.STATIC_DRAW,
   );
+
+  function getLocations() {
+    return {
+      position: gl.getAttribLocation(program, "a_position"),
+      resolution: gl.getUniformLocation(program, "u_resolution"),
+      time: gl.getUniformLocation(program, "u_time"),
+      accentColor: gl.getUniformLocation(program, "u_accentColor"),
+      secondaryColor: gl.getUniformLocation(program, "u_secondaryColor"),
+      intensity: gl.getUniformLocation(program, "u_intensity"),
+    };
+  }
 
   function resize() {
     const pixelRatio = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
@@ -172,6 +227,18 @@ function createRenderer(canvas, logger) {
   }
 
   return {
+    setFragmentShader(nextFragmentSource) {
+      if (!nextFragmentSource || nextFragmentSource === activeFragmentSource) return;
+      try {
+        const nextProgram = createProgram(gl, nextFragmentSource);
+        gl.deleteProgram(program);
+        program = nextProgram;
+        locations = getLocations();
+        activeFragmentSource = nextFragmentSource;
+      } catch (error) {
+        logger.warn("Scene shader compilation failed; keeping previous shader.", error);
+      }
+    },
     setParameters(nextParameters = {}) {
       parameters = { ...parameters, ...nextParameters };
       startedAt = performance.now();
@@ -182,7 +249,7 @@ function createRenderer(canvas, logger) {
   };
 }
 
-function createSceneController(dom, renderer, instance, logger) {
+function createSceneController(dom, renderer, instance, assetBase, logger) {
   let currentScene = { ...IDLE_SCENE };
   let countdownTimer = null;
 
@@ -204,16 +271,31 @@ function createSceneController(dom, renderer, instance, logger) {
     dom.countdown.textContent = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
   }
 
-  function setScene(nextScene) {
+  async function setScene(nextScene) {
+    const sceneKey = sanitizeSceneKey(nextScene.sceneKey || currentScene.sceneKey);
+    const definition = await loadSceneDefinition(sceneKey, assetBase, logger);
+    const definitionDefaults = definition?.manifest?.defaults || {};
+    const baseScene =
+      currentScene.sceneKey === sceneKey
+        ? currentScene
+        : {
+            ...IDLE_SCENE,
+            ...definitionDefaults,
+            sceneKey,
+          };
+
     currentScene = {
-      ...currentScene,
+      ...baseScene,
       ...nextScene,
+      sceneKey,
       parameters: {
-        ...currentScene.parameters,
+        ...(definitionDefaults.parameters || {}),
+        ...(baseScene.parameters || {}),
         ...(nextScene.parameters || {}),
       },
     };
 
+    if (definition?.fragmentShader) renderer.setFragmentShader(definition.fragmentShader);
     dom.content.classList.toggle("scene-idle", currentScene.sceneKey === "idle");
     dom.kicker.textContent = currentScene.kicker || currentScene.sceneKey || "";
     dom.title.textContent = currentScene.title || "";
@@ -236,12 +318,12 @@ function createSceneController(dom, renderer, instance, logger) {
     if (targetInstance !== instance) return;
 
     if (packet.type === "scene.end") {
-      setScene({ ...IDLE_SCENE });
+      void setScene({ ...IDLE_SCENE });
       return;
     }
 
     if (packet.type === "scene.begin" || packet.type === "scene.update") {
-      setScene(packet.payload || {});
+      void setScene(packet.payload || {});
       logger.debug("scene event applied", packet);
     }
   }
@@ -289,7 +371,7 @@ async function restoreSceneState({ apiUrl, instance, controller, logger }) {
     const response = await fetch(`${apiUrl.replace(/\/$/, "")}/api/scenes/${instance}/state`);
     if (!response.ok) return;
     const state = await response.json();
-    if (state?.active) controller.setScene(state.active);
+    if (state?.active) await controller.setScene(state.active);
   } catch (error) {
     logger.debug("Scene state restore skipped", error);
   }
@@ -300,6 +382,7 @@ const debug = readFlag(params, "debug");
 const instance = normalizeInstance(params.get("instance"));
 const overlayWsUrl = safeUrl(params.get("overlayWsUrl"), DEFAULT_OVERLAY_WS_URL, ["ws:", "wss:"]);
 const sceneApiUrl = safeUrl(params.get("sceneApiUrl"), DEFAULT_SCENE_API_URL, ["http:", "https:"]);
+const sceneAssetBase = params.get("sceneAssetBase") || DEFAULT_SCENE_ASSET_BASE;
 const logger = createLogger("scene-runtime", debug);
 
 if (debug) document.body.classList.add("scene-debug");
@@ -315,12 +398,12 @@ const dom = {
 };
 
 const renderer = createRenderer(dom.canvas, logger);
-const controller = createSceneController(dom, renderer, instance, logger);
+const controller = createSceneController(dom, renderer, instance, sceneAssetBase, logger);
 renderer.start();
 restoreSceneState({ apiUrl: sceneApiUrl, instance, controller, logger });
 
 if (readFlag(params, "demo")) {
-  controller.setScene({
+  void controller.setScene({
     sceneKey: "starting-soon",
     kicker: "Live shortly",
     title: "Starting Soon",
