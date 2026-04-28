@@ -103,6 +103,7 @@ Use `&demo=true` to preview a sample lower-third without a backend. The runtime
 handles:
 
 - `overlay.resource.updated`
+- `overlay.state.patch`
 
 Example:
 
@@ -143,6 +144,22 @@ Example:
         }
       ]
     }
+  }
+}
+```
+
+After a resource is loaded, Showrunner can update bound labels without sending
+the full overlay again:
+
+```json
+{
+  "type": "overlay.state.patch",
+  "target": {
+    "instance": "main"
+  },
+  "payload": {
+    "path": "platform.twitch.latestFollower.displayName",
+    "value": "ViewerName"
   }
 }
 ```

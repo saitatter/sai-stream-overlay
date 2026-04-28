@@ -108,6 +108,19 @@ export function normalizeOverlayResourceEvent(packet) {
   return normalizeOverlayResource(resource);
 }
 
+export function normalizeOverlayStatePatchEvent(packet) {
+  if (!packet || packet.type !== "overlay.state.patch") return null;
+  const payload = packet.payload && typeof packet.payload === "object" ? packet.payload : {};
+  if (typeof payload.path !== "string" || !payload.path.trim()) return null;
+  return {
+    target: {
+      instance: normalizeInstance(packet.target?.instance || payload.target?.instance),
+    },
+    path: payload.path.trim(),
+    value: payload.value == null ? "" : String(payload.value),
+  };
+}
+
 function nodeText(node, state) {
   if (node.binding) return state[node.binding] ?? node.text ?? "";
   return node.text ?? "";
@@ -170,13 +183,27 @@ export function createOverlayController({ dom, instance = DEFAULT_INSTANCE, logg
     return true;
   }
 
+  function applyStatePatch(patch) {
+    if (!patch) return false;
+    if (patch.target.instance !== instance) return false;
+    state[patch.path] = patch.value;
+    for (const element of dom.root.querySelectorAll?.("[data-binding]") || []) {
+      if (element.dataset.binding === patch.path) element.textContent = patch.value;
+    }
+    dom.status.textContent = `Overlay state: ${patch.path}`;
+    logger.debug("overlay state patch applied", patch);
+    return true;
+  }
+
   function handleEvent(packet) {
     const resource = normalizeOverlayResourceEvent(packet);
-    return applyResource(resource);
+    if (resource) return applyResource(resource);
+    return applyStatePatch(normalizeOverlayStatePatchEvent(packet));
   }
 
   return {
     applyResource,
+    applyStatePatch,
     handleEvent,
     render,
   };

@@ -3,6 +3,7 @@ import {
   createOverlayController,
   normalizeOverlayResource,
   normalizeOverlayResourceEvent,
+  normalizeOverlayStatePatchEvent,
 } from "../overlay/js/overlay-runtime.js";
 
 function createDom() {
@@ -13,6 +14,7 @@ function createDom() {
       toggle: vi.fn(),
     },
     appendChild: vi.fn((element) => root.children.push(element)),
+    querySelectorAll: vi.fn(() => root.children),
     replaceChildren: vi.fn(() => {
       root.children = [];
     }),
@@ -119,5 +121,62 @@ describe("overlay resource runtime", () => {
     expect(elements[0].className).toContain("overlay-node-panel");
     expect(elements[1].textContent).toBe("Latest follower");
     expect(dom.status.textContent).toBe("Overlay: main-alerts");
+  });
+
+  it("applies overlay.state.patch events to bound labels", () => {
+    const elements = [];
+    vi.stubGlobal("document", {
+      createElement: vi.fn(() => {
+        const element = {
+          className: "",
+          dataset: {},
+          style: {},
+          textContent: "",
+        };
+        elements.push(element);
+        return element;
+      }),
+    });
+    const dom = createDom();
+    const controller = createOverlayController({
+      dom,
+      instance: "main",
+      logger: { debug: vi.fn() },
+    });
+    controller.applyResource(
+      normalizeOverlayResource({
+        key: "main-alerts",
+        target: { instance: "main" },
+        size: { width: 1920, height: 1080 },
+        nodes: [
+          {
+            id: "label-1",
+            type: "label",
+            binding: "platform.twitch.latestFollower.displayName",
+            text: "Waiting",
+            x: 80,
+            y: 90,
+            width: 320,
+            height: 80,
+            style: { color: "#ffffff" },
+          },
+        ],
+      }),
+    );
+
+    const patch = normalizeOverlayStatePatchEvent({
+      type: "overlay.state.patch",
+      target: { instance: "main" },
+      payload: {
+        path: "platform.twitch.latestFollower.displayName",
+        value: "ViewerName",
+      },
+    });
+    expect(controller.applyStatePatch(patch)).toBe(true);
+
+    expect(elements[0].textContent).toBe("ViewerName");
+    expect(dom.status.textContent).toBe(
+      "Overlay state: platform.twitch.latestFollower.displayName",
+    );
   });
 });
