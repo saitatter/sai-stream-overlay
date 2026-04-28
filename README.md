@@ -71,6 +71,41 @@ http://localhost:8080/overlay/scene.html?instance=main&overlayWsUrl=ws%3A%2F%2Fl
 
 Use `&demo=true` to preview the shader scene without the moderation backend.
 
+Scene events are consumed from the overlay WebSocket channel:
+
+```json
+{
+  "type": "scene.begin",
+  "target": {
+    "overlay": "scene",
+    "instance": "main"
+  },
+  "payload": {
+    "sceneKey": "starting-soon",
+    "title": "Starting Soon",
+    "subtitle": "Stream begins shortly",
+    "fragmentShader": "precision highp float; void main() { gl_FragColor = vec4(1.0); }",
+    "parameters": {
+      "accentColor": "#9146FF",
+      "secondaryColor": "#00D1FF",
+      "intensity": 0.8
+    }
+  }
+}
+```
+
+`payload.fragmentShader` is optional. When present on `scene.begin` or
+`scene.update`, it is compiled as the active fragment shader for that event. If
+it is absent or blank, the runtime uses the scene manifest's `fragmentShader`
+asset, then falls back to the built-in shader. Inline shader payloads are capped
+at 50 KB to avoid accidental oversized event frames.
+
+The runtime reports scene health back through the same WebSocket when the event
+hub accepts client-to-server messages, and also dispatches a local
+`sai-scene-status` browser event. Status packets use `type: "scene.status"` with
+`payload.lifecycle` values such as `compile-ok`, `compile-error`, `applied`, and
+`idle`.
+
 ---
 
 ## ⚙️ Configuration (URL params)

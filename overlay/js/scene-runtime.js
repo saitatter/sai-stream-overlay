@@ -3,6 +3,7 @@ import { createLogger } from "./logger.js";
 const DEFAULT_OVERLAY_WS_URL = "ws://localhost:8787/ws?channel=overlay";
 const DEFAULT_SCENE_API_URL = "http://localhost:8787";
 const DEFAULT_SCENE_ASSET_BASE = "scenes";
+const MAX_INLINE_FRAGMENT_SHADER_LENGTH = 50000;
 const IDLE_SCENE = {
   sceneKey: "idle",
   title: "",
@@ -144,6 +145,66 @@ function sanitizeSceneKey(value) {
   return /^[a-z0-9_-]{1,64}$/.test(normalized) ? normalized : "idle";
 }
 
+export function normalizeInlineFragmentShader(value) {
+  if (typeof value !== "string") return "";
+  const source = value.trim();
+  if (!source || source.length > MAX_INLINE_FRAGMENT_SHADER_LENGTH) return "";
+  return source;
+}
+
+export function resolveSceneFragmentShader(nextScene = {}, definition = null) {
+  const inlineFragmentShader = normalizeInlineFragmentShader(nextScene.fragmentShader);
+  if (inlineFragmentShader) {
+    return {
+      source: inlineFragmentShader,
+      sourceType: "inline",
+    };
+  }
+
+  if (definition?.fragmentShader) {
+    return {
+      source: definition.fragmentShader,
+      sourceType: definition.fragmentShader === fragmentShaderSource ? "builtin" : "manifest",
+    };
+  }
+
+  return {
+    source: fragmentShaderSource,
+    sourceType: "builtin",
+  };
+}
+
+export function createSceneStatusEvent({
+  instance,
+  sceneKey,
+  lifecycle,
+  severity = "info",
+  message = "",
+  detail = "",
+  shaderSource = "",
+}) {
+  return {
+    version: 1,
+    type: "scene.status",
+    source: "overlay",
+    status: "system",
+    createdAt: new Date().toISOString(),
+    target: {
+      overlay: "scene",
+      instance,
+    },
+    payload: {
+      instance,
+      sceneKey,
+      lifecycle,
+      severity,
+      message,
+      detail,
+      shaderSource,
+    },
+  };
+}
+
 async function readText(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Failed to load ${url}`);
@@ -198,7 +259,12 @@ function createRenderer(canvas, logger) {
   if (!gl) {
     logger.warn("WebGL unavailable for scene runtime.");
     return {
-      setFragmentShader() {},
+      setFragmentShader() {
+        return {
+          ok: false,
+          error: "WebGL unavailable",
+        };
+      },
       setParameters() {},
       setActive() {},
       start() {},
@@ -282,7 +348,18 @@ function createRenderer(canvas, logger) {
 
   return {
     setFragmentShader(nextFragmentSource) {
-      if (!nextFragmentSource || nextFragmentSource === activeFragmentSource) return;
+      if (!nextFragmentSource) {
+        return {
+          ok: false,
+          error: "Empty fragment shader",
+        };
+      }
+      if (nextFragmentSource === activeFragmentSource) {
+        return {
+          ok: true,
+          unchanged: true,
+        };
+      }
       try {
         const nextProgram = createProgram(gl, nextFragmentSource);
         gl.deleteProgram(program);
@@ -290,8 +367,16 @@ function createRenderer(canvas, logger) {
         locations = getLocations();
         activeFragmentSource = nextFragmentSource;
         startedAt = performance.now();
+        return {
+          ok: true,
+          unchanged: false,
+        };
       } catch (error) {
         logger.warn("Scene shader compilation failed; keeping previous shader.", error);
+        return {
+          ok: false,
+          error: error?.message || "Scene shader compilation failed",
+        };
       }
     },
     setParameters(nextParameters = {}) {
@@ -320,7 +405,7 @@ function createRenderer(canvas, logger) {
   };
 }
 
-function createSceneController(dom, renderer, instance, assetBase, logger) {
+function createSceneController(dom, renderer, instance, assetBase, logger, emitStatus = () => {}) {
   let currentScene = { ...IDLE_SCENE };
   let countdownTimer = null;
   let sceneQueue = Promise.resolve();
@@ -367,7 +452,31 @@ function createSceneController(dom, renderer, instance, assetBase, logger) {
       },
     };
 
-    if (definition?.fragmentShader) renderer.setFragmentShader(definition.fragmentShader);
+    const fragmentShader = resolveSceneFragmentShader(nextScene, definition);
+    const shaderResult = renderer.setFragmentShader(fragmentShader.source);
+    if (!shaderResult.ok) {
+      emitStatus(
+        createSceneStatusEvent({
+          instance,
+          sceneKey,
+          lifecycle: "compile-error",
+          severity: "error",
+          message: "Scene shader compilation failed; previous shader remains active.",
+          detail: shaderResult.error,
+          shaderSource: fragmentShader.sourceType,
+        }),
+      );
+    } else if (!shaderResult.unchanged) {
+      emitStatus(
+        createSceneStatusEvent({
+          instance,
+          sceneKey,
+          lifecycle: "compile-ok",
+          message: "Scene shader compiled.",
+          shaderSource: fragmentShader.sourceType,
+        }),
+      );
+    }
     const isIdle = currentScene.sceneKey === "idle";
     dom.content.classList.toggle("scene-idle", isIdle);
     dom.canvas.classList.toggle("scene-idle", isIdle);
@@ -389,6 +498,15 @@ function createSceneController(dom, renderer, instance, assetBase, logger) {
     if (Number.isFinite(countdownEndMs) && countdownEndMs > Date.now()) {
       countdownTimer = setInterval(updateCountdown, 500);
     }
+    emitStatus(
+      createSceneStatusEvent({
+        instance,
+        sceneKey,
+        lifecycle: isIdle ? "idle" : "applied",
+        message: isIdle ? "Scene overlay returned to idle." : "Scene event applied.",
+        shaderSource: fragmentShader.sourceType,
+      }),
+    );
   }
 
   function enqueueSceneUpdate(nextScene) {
@@ -422,11 +540,25 @@ function createSceneController(dom, renderer, instance, assetBase, logger) {
   };
 }
 
-function connectSceneSocket({ wsUrl, logger, onPacket, statusEl }) {
+function connectSceneSocket({ wsUrl, logger, onPacket, statusEl, onStatusSender = () => {} }) {
   let reconnectAttempt = 0;
+  let activeSocket = null;
+
+  function sendStatus(packet) {
+    if (!activeSocket || activeSocket.readyState !== WebSocket.OPEN) return false;
+    try {
+      activeSocket.send(JSON.stringify(packet));
+      return true;
+    } catch (error) {
+      logger.warn("Scene status event could not be sent.", error);
+      return false;
+    }
+  }
 
   function connect() {
     const socket = new WebSocket(wsUrl);
+    activeSocket = socket;
+    onStatusSender(sendStatus);
     statusEl.textContent = "Scene: connecting";
 
     socket.addEventListener("open", () => {
@@ -444,6 +576,7 @@ function connectSceneSocket({ wsUrl, logger, onPacket, statusEl }) {
     });
 
     socket.addEventListener("close", () => {
+      if (activeSocket === socket) activeSocket = null;
       reconnectAttempt += 1;
       const delay = Math.min(12000, 750 * 2 ** Math.max(0, reconnectAttempt - 1));
       statusEl.textContent = `Scene: reconnecting (${reconnectAttempt})`;
@@ -465,49 +598,69 @@ async function restoreSceneState({ apiUrl, instance, controller, logger }) {
   }
 }
 
-const params = new URLSearchParams(window.location.search);
-const debug = readFlag(params, "debug");
-const instance = normalizeInstance(params.get("instance"));
-const overlayWsUrl = safeUrl(params.get("overlayWsUrl"), DEFAULT_OVERLAY_WS_URL, ["ws:", "wss:"]);
-const sceneApiUrl = safeUrl(params.get("sceneApiUrl"), DEFAULT_SCENE_API_URL, ["http:", "https:"]);
-const sceneAssetBase = safeRelativePath(params.get("sceneAssetBase"), DEFAULT_SCENE_ASSET_BASE);
-const logger = createLogger("scene-runtime", debug);
+if (typeof window !== "undefined" && typeof document !== "undefined") {
+  const params = new URLSearchParams(window.location.search);
+  const debug = readFlag(params, "debug");
+  const instance = normalizeInstance(params.get("instance"));
+  const overlayWsUrl = safeUrl(params.get("overlayWsUrl"), DEFAULT_OVERLAY_WS_URL, ["ws:", "wss:"]);
+  const sceneApiUrl = safeUrl(params.get("sceneApiUrl"), DEFAULT_SCENE_API_URL, [
+    "http:",
+    "https:",
+  ]);
+  const sceneAssetBase = safeRelativePath(params.get("sceneAssetBase"), DEFAULT_SCENE_ASSET_BASE);
+  const logger = createLogger("scene-runtime", debug);
+  let sendSceneStatus = () => false;
+  const emitSceneStatus = (packet) => {
+    window.dispatchEvent(new CustomEvent("sai-scene-status", { detail: packet }));
+    sendSceneStatus(packet);
+  };
 
-if (debug) document.body.classList.add("scene-debug");
+  if (debug) document.body.classList.add("scene-debug");
 
-const dom = {
-  canvas: document.getElementById("sceneCanvas"),
-  content: document.getElementById("sceneContent"),
-  kicker: document.getElementById("sceneKicker"),
-  title: document.getElementById("sceneTitle"),
-  subtitle: document.getElementById("sceneSubtitle"),
-  countdown: document.getElementById("sceneCountdown"),
-  status: document.getElementById("sceneStatus"),
-};
+  const dom = {
+    canvas: document.getElementById("sceneCanvas"),
+    content: document.getElementById("sceneContent"),
+    kicker: document.getElementById("sceneKicker"),
+    title: document.getElementById("sceneTitle"),
+    subtitle: document.getElementById("sceneSubtitle"),
+    countdown: document.getElementById("sceneCountdown"),
+    status: document.getElementById("sceneStatus"),
+  };
 
-const renderer = createRenderer(dom.canvas, logger);
-const controller = createSceneController(dom, renderer, instance, sceneAssetBase, logger);
-renderer.start();
-restoreSceneState({ apiUrl: sceneApiUrl, instance, controller, logger });
-
-if (readFlag(params, "demo")) {
-  void controller.setScene({
-    sceneKey: "starting-soon",
-    kicker: "Live shortly",
-    title: "Starting Soon",
-    subtitle: "Grab a drink and settle in.",
-    countdownEndsAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-    parameters: {
-      accentColor: "#9146FF",
-      secondaryColor: "#00D1FF",
-      intensity: 0.9,
-    },
-  });
-} else {
-  connectSceneSocket({
-    wsUrl: overlayWsUrl,
+  const renderer = createRenderer(dom.canvas, logger);
+  const controller = createSceneController(
+    dom,
+    renderer,
+    instance,
+    sceneAssetBase,
     logger,
-    onPacket: controller.handleEvent,
-    statusEl: dom.status,
-  });
+    emitSceneStatus,
+  );
+  renderer.start();
+  restoreSceneState({ apiUrl: sceneApiUrl, instance, controller, logger });
+
+  if (readFlag(params, "demo")) {
+    void controller.setScene({
+      sceneKey: "starting-soon",
+      kicker: "Live shortly",
+      title: "Starting Soon",
+      subtitle: "Grab a drink and settle in.",
+      countdownEndsAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      parameters: {
+        accentColor: "#9146FF",
+        secondaryColor: "#00D1FF",
+        intensity: 0.9,
+      },
+    });
+  } else {
+    connectSceneSocket({
+      wsUrl: overlayWsUrl,
+      logger,
+      onPacket: controller.handleEvent,
+      statusEl: dom.status,
+      onStatusSender(nextSender) {
+        sendSceneStatus = nextSender;
+      },
+    });
+  }
 }

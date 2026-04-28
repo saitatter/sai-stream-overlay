@@ -306,6 +306,7 @@ modes.
     "title": "Starting Soon",
     "subtitle": "Stream begins shortly",
     "countdownEndsAt": "2026-04-28T08:15:00.000Z",
+    "fragmentShader": "precision highp float; void main() { gl_FragColor = vec4(1.0); }",
     "parameters": {
       "accentColor": "#9146FF",
       "intensity": 0.8,
@@ -539,7 +540,44 @@ For shader scenes, the runtime should expose standard uniforms:
 - `u_progress`: transition or countdown progress when relevant
 
 Scene event updates should change uniforms without recompiling the shader unless
-the selected preset changes.
+the selected preset changes. During cross-repo runtime work, the overlay also
+accepts an optional `payload.fragmentShader` on `scene.begin` and `scene.update`
+for trusted event hubs that need to inline a fragment shader. Inline shaders
+override the scene manifest shader for that event; absent, blank, or oversized
+inline shaders fall back to the manifest shader, then the built-in shader.
+
+### Scene Runtime Status Events
+
+Scene overlays should report runtime health to the moderation/event hub when the
+overlay WebSocket supports client-to-server messages. The current payload is also
+dispatched locally as a `sai-scene-status` browser event so tests, diagnostics,
+or OBS browser tooling can observe the same contract.
+
+```json
+{
+  "version": 1,
+  "type": "scene.status",
+  "source": "overlay",
+  "status": "system",
+  "createdAt": "2026-04-28T08:00:00.000Z",
+  "target": {
+    "overlay": "scene",
+    "instance": "main"
+  },
+  "payload": {
+    "instance": "main",
+    "sceneKey": "starting-soon",
+    "lifecycle": "compile-error",
+    "severity": "error",
+    "message": "Scene shader compilation failed; previous shader remains active.",
+    "detail": "ERROR: 0:1: syntax error",
+    "shaderSource": "inline"
+  }
+}
+```
+
+`payload.lifecycle` currently includes `compile-ok`, `compile-error`, `applied`,
+and `idle`. `payload.shaderSource` is `inline`, `manifest`, or `builtin`.
 
 ### Scene Instance Binding
 
