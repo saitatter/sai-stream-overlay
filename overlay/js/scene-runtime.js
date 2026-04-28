@@ -345,16 +345,16 @@ function createSceneController(dom, renderer, instance, assetBase, logger) {
 
   async function setScene(nextScene) {
     const sceneKey = sanitizeSceneKey(nextScene.sceneKey || currentScene.sceneKey);
+    const sceneChanged = currentScene.sceneKey !== sceneKey;
     const definition = await loadSceneDefinition(sceneKey, assetBase, logger);
     const definitionDefaults = definition?.manifest?.defaults || {};
-    const baseScene =
-      currentScene.sceneKey === sceneKey
-        ? currentScene
-        : {
-            ...IDLE_SCENE,
-            ...definitionDefaults,
-            sceneKey,
-          };
+    const baseScene = !sceneChanged
+      ? currentScene
+      : {
+          ...IDLE_SCENE,
+          ...definitionDefaults,
+          sceneKey,
+        };
 
     currentScene = {
       ...baseScene,
@@ -367,7 +367,13 @@ function createSceneController(dom, renderer, instance, assetBase, logger) {
       },
     };
 
-    if (definition?.fragmentShader) renderer.setFragmentShader(definition.fragmentShader);
+    const inlineFragmentShader =
+      typeof nextScene.fragmentShader === "string" && nextScene.fragmentShader.trim()
+        ? nextScene.fragmentShader
+        : "";
+    const nextFragmentShader =
+      inlineFragmentShader || (sceneChanged ? definition?.fragmentShader : "");
+    if (nextFragmentShader) renderer.setFragmentShader(nextFragmentShader);
     const isIdle = currentScene.sceneKey === "idle";
     dom.content.classList.toggle("scene-idle", isIdle);
     dom.canvas.classList.toggle("scene-idle", isIdle);
