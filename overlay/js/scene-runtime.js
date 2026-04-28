@@ -101,29 +101,40 @@ function hexToVec3(hex, fallback) {
 
 function createShader(gl, type, source) {
   const shader = gl.createShader(type);
+  if (!shader) throw new Error("Failed to create shader object");
+
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    throw new Error(gl.getShaderInfoLog(shader) || "Shader compilation failed");
+    const info = gl.getShaderInfoLog(shader);
+    gl.deleteShader(shader);
+    throw new Error(info || "Shader compilation failed");
   }
   return shader;
 }
 
 function createProgram(gl, fragmentSource = fragmentShaderSource) {
   const program = gl.createProgram();
-  const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
-  const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
+  if (!program) throw new Error("Failed to create program object");
 
-  gl.attachShader(program, vertexShader);
-  gl.attachShader(program, fragmentShader);
-  gl.linkProgram(program);
-  gl.deleteShader(vertexShader);
-  gl.deleteShader(fragmentShader);
+  try {
+    const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
 
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    throw new Error(gl.getProgramInfoLog(program) || "Shader linking failed");
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+    gl.deleteShader(vertexShader);
+    gl.deleteShader(fragmentShader);
+
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      throw new Error(gl.getProgramInfoLog(program) || "Shader linking failed");
+    }
+    return program;
+  } catch (error) {
+    gl.deleteProgram(program);
+    throw error;
   }
-  return program;
 }
 
 function sanitizeSceneKey(value) {
