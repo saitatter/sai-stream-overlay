@@ -70,7 +70,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/sai-chat-overlay
+          images: ghcr.io/${{ github.repository_owner }}/sai-stream-overlay
           tags: |
             type=raw,value=latest
             type=raw,value=${{ needs.release.outputs.version }}

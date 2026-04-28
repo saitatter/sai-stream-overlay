@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Scene Overlay</title>
+    <link rel="stylesheet" href="scene.css" />
+  </head>
+  <body>
+    <canvas id="sceneCanvas" aria-hidden="true"></canvas>
+    <main id="sceneContent" class="scene-content scene-idle">
+      <div id="sceneKicker" class="scene-kicker"></div>
+      <h1 id="sceneTitle"></h1>
+      <p id="sceneSubtitle"></p>
+      <div id="sceneCountdown" class="scene-countdown"></div>
+    </main>
+    <div id="sceneStatus" class="scene-status">Scene: idle</div>
+    <script type="module" src="js/scene-runtime.js"></script>
+  </body>
+</html>

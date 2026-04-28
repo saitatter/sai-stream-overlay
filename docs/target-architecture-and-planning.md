@@ -2,7 +2,7 @@
 
 Status date: 2026-04-28
 
-This document describes the intended direction for `sai-chat-overlay`: move from a
+This document describes the intended direction for `sai-stream-overlay`: move from a
 single OBS chat overlay that connects directly to Streamer.bot into a small overlay
 platform with a moderation service, normalized events, and multiple frontend
 overlays.
@@ -29,7 +29,7 @@ overlays.
 Streamer.bot WebSocket
         |
         v
-sai-chat-overlay frontend in OBS Browser Source
+sai-stream-overlay frontend in OBS Browser Source
         |
         v
 parse Twitch/YouTube events, render chat bubbles
@@ -120,7 +120,7 @@ Responsibilities:
 - expose style-only settings through URL params or presets
 - handle reconnect and visual fallback states
 
-The current `sai-chat-overlay` can evolve into the first overlay frontend:
+The current `sai-stream-overlay` can evolve into the first overlay frontend:
 
 - replace direct Streamer.bot subscription with moderation-service subscription
 - change parsers from Streamer.bot payload parsers to normalized event parsers

@@ -1,0 +1,17 @@
+{
+  "key": "starting-soon",
+  "label": "Starting Soon",
+  "mode": "webgl-shader",
+  "fragmentShader": "fragment.glsl",
+  "defaults": {
+    "kicker": "Live shortly",
+    "title": "Starting Soon",
+    "subtitle": "Grab a drink and settle in.",
+    "countdownEndsAt": "",
+    "parameters": {
+      "accentColor": "#9146FF",
+      "secondaryColor": "#00D1FF",
+      "intensity": 0.9
+    }
+  }
+}
