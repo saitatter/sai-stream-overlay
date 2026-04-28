@@ -198,7 +198,7 @@ All events should share a small envelope.
   },
   "actor": {
     "id": "123",
-    "name": "ViewerName",
+    "name": "viewername",
     "displayName": "ViewerName",
     "badges": []
   },
@@ -218,6 +218,10 @@ Shared fields:
 - `display`: overlay hints, not business rules
 - `actor`: user/viewer/trigger actor, when relevant
 - `payload`: type-specific data
+
+For chat actors, `actor.name` should be the stable platform login or unique
+handle when available, while `actor.displayName` is the presentation label shown
+in overlays.
 
 ### Chat Message
 

@@ -31,8 +31,10 @@ function readEventSource(params) {
 }
 
 function readBooleanFlag(params, name) {
+  if (!params.has(name)) return false;
   const value = params.get(name);
-  if (typeof value !== "string") return false;
+  if (value === "") return true;
+  if (typeof value !== "string") return true;
   const normalized = value.trim().toLowerCase();
   return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
 }

@@ -13,26 +13,36 @@
     <div id="settingsPanel">
       <h3>Overlay Settings</h3>
 
-      <label
-        >Twitch Color
+      <label>
+        Twitch Color
         <input type="color" id="twitchColor" value="#9146FF" />
       </label>
-      <label>YouTube Color <input type="color" id="youtubeColor" value="#FF0000" /> </label><br />
+      <label>
+        YouTube Color
+        <input type="color" id="youtubeColor" value="#FF0000" />
+      </label>
+      <br />
 
-      <label>Message Duration <input type="number" id="fadeTime" value="10" /> sec </label><br />
+      <label>
+        Message Duration
+        <input type="number" id="fadeTime" value="10" />
+        sec
+      </label>
+      <br />
 
-      <label
-        >Message Background Color
+      <label>
+        Message Background Color
         <input type="color" id="msgBgColor" value="#000000" />
       </label>
-      <label
-        >Background Opacity
-        <input type="range" id="msgBgOpacity" min="0" max="1" step="0.01" value="0.6" /> </label
-      ><br />
+      <label>
+        Background Opacity
+        <input type="range" id="msgBgOpacity" min="0" max="1" step="0.01" value="0.6" />
+      </label>
+      <br />
 
       <label for="fontFamilySelect">Font Family</label>
-      <select id="fontFamilySelect"></select
-      ><br />
+      <select id="fontFamilySelect"></select>
+      <br />
       <div id="wsStatus" class="ws-status ws-status-connecting">WS: connecting...</div>
       <button id="copyUrlBtn">Copy URL for OBS</button>
     </div>
