@@ -1,176 +1,177 @@
+:root {
+  --msg-enter-ms: 300;
+  --msg-shift-ms: 500;
+}
+
+body {
+  background: transparent;
+  font-family: "Poppins", sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+/* Horizontal chat container */
+#chat {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  align-items: flex-end;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  justify-content: flex-start;
+  position: relative;
+  height: 40px;
+  font-family: var(--chat-font-family, "Poppins", sans-serif);
+}
+
+.msg {
+  display: inline-block;
+  padding: 10px 15px;
+  background: var(--msg-bg-color, rgba(0, 0, 0, 0.6));
+  border-radius: 8px;
+  color: white;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transform: translateX(100%);
+  transition: transform calc(var(--msg-shift-ms, 500) * 1ms) ease;
+  position: relative;
+  font-family: var(--chat-font-family, "Poppins", sans-serif);
+  will-change: transform, opacity;
+}
+
+.msg.twitch {
+  border-left: 4px solid var(--twitch-color, #9146ff);
+}
+
+.msg.youtube {
+  border-left: 4px solid var(--youtube-color, #ff0000);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeOut {
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+.badge {
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+/* Settings panel */
+#settingsPanel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: 280px;
+  background: #222;
+  color: white;
+  padding: 20px;
+  box-sizing: border-box;
+  border-radius: 0 0 0 10px;
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+  overflow-y: auto;
+  z-index: 9999;
+}
+
+#settingsPanel.open {
+  transform: translateX(0);
+}
+
+/* Toggle button */
+#settingsToggle {
+  position: fixed;
+  top: 50%;
+  right: 280px;
+  transform: translateY(-50%);
+  background: #222;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px 0 0 6px;
+  cursor: pointer;
+  font-weight: bold;
+  z-index: 10000;
+  user-select: none;
+  transition:
+    background 0.2s ease,
+    right 0.3s ease;
+}
+
+#settingsToggle:hover {
+  background: #444;
+}
+
+#settingsPanel:not(.open) + #settingsToggle {
+  right: 0;
+}
+
+label {
+  display: block;
+  margin-bottom: 12px;
+}
+
+input[type="color"],
+input[type="number"] {
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.ws-status {
+  margin: 8px 0 12px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: #2d2d2d;
+  border: 1px solid #3a3a3a;
+}
+
+.ws-status-connected {
+  color: #7df2a5;
+  border-color: #2f8f58;
+}
+
+.ws-status-connecting,
+.ws-status-reconnecting {
+  color: #ffd36a;
+  border-color: #8e6a1f;
+}
+
+.ws-status-disconnected {
+  color: #ff8b8b;
+  border-color: #8a3434;
+}
+
+@media (prefers-reduced-motion: reduce) {
   :root {
-      --msg-enter-ms: 300;
-      --msg-shift-ms: 500;
+    --msg-enter-ms: 0;
+    --msg-shift-ms: 120;
   }
 
-  body {
-      background: transparent;
-      font-family: 'Poppins', sans-serif;
-      margin: 0;
-      padding: 0;
-  }
-
-  /* Horizontal chat container */
-  #chat {
-      display: flex;
-      flex-direction: row;
-      gap: 10px;
-      align-items: flex-end;
-      max-width: 100%;
-      overflow: hidden;
-      white-space: nowrap;
-      justify-content: flex-start;
-      position: relative;
-      height: 40px;
-      font-family: var(--chat-font-family, 'Poppins', sans-serif);
-  }
-
-  .msg {
-      display: inline-block;
-      padding: 10px 15px;
-      background: var(--msg-bg-color, rgba(0, 0, 0, 0.6));
-      border-radius: 8px;
-      color: white;
-      white-space: nowrap;
-      flex-shrink: 0;
-      transform: translateX(100%);
-      transition: transform calc(var(--msg-shift-ms, 500) * 1ms) ease;
-      position: relative;
-      font-family: var(--chat-font-family, 'Poppins', sans-serif);
-      will-change: transform, opacity;
-  }
-
-  .msg.twitch {
-      border-left: 4px solid var(--twitch-color, #9146FF);
-  }
-
-  .msg.youtube {
-      border-left: 4px solid var(--youtube-color, #FF0000);
-  }
-
-  @keyframes fadeIn {
-      from {
-          opacity: 0;
-          transform: translateY(10px);
-      }
-
-      to {
-          opacity: 1;
-          transform: translateY(0);
-      }
-  }
-
-  @keyframes fadeOut {
-      to {
-          opacity: 0;
-          transform: translateY(-10px);
-      }
-  }
-
-  .badge {
-      width: 16px;
-      height: 16px;
-      margin-right: 4px;
-      vertical-align: middle;
-  }
-
-  /* Settings panel */
-  #settingsPanel {
-      position: fixed;
-      top: 0;
-      right: 0;
-      height: 100vh;
-      width: 280px;
-      background: #222;
-      color: white;
-      padding: 20px;
-      box-sizing: border-box;
-      border-radius: 0 0 0 10px;
-      transform: translateX(100%);
-      transition: transform 0.3s ease;
-      overflow-y: auto;
-      z-index: 9999;
-  }
-
-  #settingsPanel.open {
-      transform: translateX(0);
-  }
-
-  /* Toggle button */
+  .msg,
+  #settingsPanel,
   #settingsToggle {
-      position: fixed;
-      top: 50%;
-      right: 280px;
-      transform: translateY(-50%);
-      background: #222;
-      color: white;
-      border: none;
-      padding: 8px 12px;
-      border-radius: 6px 0 0 6px;
-      cursor: pointer;
-      font-weight: bold;
-      z-index: 10000;
-      user-select: none;
-      transition: background 0.2s ease, right 0.3s ease;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
   }
-
-  #settingsToggle:hover {
-      background: #444;
-  }
-
-  #settingsPanel:not(.open)+#settingsToggle {
-      right: 0;
-  }
-
-  label {
-      display: block;
-      margin-bottom: 12px;
-  }
-
-  input[type=color],
-  input[type=number] {
-      margin-left: 8px;
-      vertical-align: middle;
-  }
-
-  .ws-status {
-      margin: 8px 0 12px;
-      padding: 6px 8px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      background: #2d2d2d;
-      border: 1px solid #3a3a3a;
-  }
-
-  .ws-status-connected {
-      color: #7df2a5;
-      border-color: #2f8f58;
-  }
-
-  .ws-status-connecting,
-  .ws-status-reconnecting {
-      color: #ffd36a;
-      border-color: #8e6a1f;
-  }
-
-  .ws-status-disconnected {
-      color: #ff8b8b;
-      border-color: #8a3434;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-      :root {
-          --msg-enter-ms: 0;
-          --msg-shift-ms: 120;
-      }
-
-      .msg,
-      #settingsPanel,
-      #settingsToggle {
-          transition-duration: 0.01ms !important;
-          animation-duration: 0.01ms !important;
-      }
-  }
-  
+}

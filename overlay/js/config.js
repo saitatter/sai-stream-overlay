@@ -18,21 +18,55 @@ function pickWsUrlCandidate(candidates) {
   return DEFAULTS.wsUrl;
 }
 
+function pickOverlayWsUrlCandidate(candidates) {
+  for (const candidate of candidates) {
+    if (isValidWebSocketUrl(candidate)) return candidate;
+  }
+  return DEFAULTS.overlayWsUrl;
+}
+
+function readEventSource(params) {
+  const value = (params.get("eventSource") || DEFAULTS.eventSource).trim().toLowerCase();
+  return value === "moderation" ? "moderation" : DEFAULTS.eventSource;
+}
+
+function readBooleanFlag(params, name) {
+  if (!params.has(name)) return false;
+  const value = params.get(name);
+  if (value === "") return true;
+  if (typeof value !== "string") return true;
+  const normalized = value.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+}
+
 export function getRuntimeConfig() {
   const params = new URLSearchParams(window.location.search);
   const debug = readDebugFlagFromQuery();
+  const eventSource = readEventSource(params);
   const fromQuery = params.get("wsUrl") || params.get("streamerbotWsUrl");
   const fromWindow =
     window.__SAI_CHAT_OVERLAY_CONFIG__?.wsUrl || window.__SAI_OVERLAY_CONFIG__?.wsUrl;
+  const overlayFromQuery = params.get("overlayWsUrl");
+  const overlayFromWindow =
+    window.__SAI_CHAT_OVERLAY_CONFIG__?.overlayWsUrl || window.__SAI_OVERLAY_CONFIG__?.overlayWsUrl;
 
   const wsUrl = pickWsUrlCandidate([fromQuery, fromWindow, DEFAULTS.wsUrl]);
+  const overlayWsUrl = pickOverlayWsUrlCandidate([
+    overlayFromQuery,
+    overlayFromWindow,
+    DEFAULTS.overlayWsUrl,
+  ]);
   const maxMessages = Number.parseInt(params.get("maxMessages") || "", 10);
 
   return {
     debug,
+    demo: readBooleanFlag(params, "demo"),
+    eventSource,
     wsUrl,
+    overlayWsUrl,
     websocket: {
-      wsUrl,
+      eventSource,
+      wsUrl: eventSource === "moderation" ? overlayWsUrl : wsUrl,
       reconnectInitialDelayMs: WEBSOCKET_DEFAULTS.reconnectInitialDelayMs,
       reconnectMaxDelayMs: WEBSOCKET_DEFAULTS.reconnectMaxDelayMs,
       reconnectBackoff: WEBSOCKET_DEFAULTS.reconnectBackoff,

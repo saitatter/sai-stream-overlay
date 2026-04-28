@@ -1,5 +1,5 @@
 import { DEFAULTS, WEBSOCKET_DEFAULTS } from "./constants.js";
-import { parseChatEvent } from "./parsers.js";
+import { parseChatEvent, parseModerationChatEvent } from "./parsers.js";
 
 function subscribeToChatEvents(ws) {
   ws.send(
@@ -31,10 +31,10 @@ export function computeBackoffDelay({
 
 export function connectChatSocket(onChatMessage, options = {}) {
   const wsUrl = options.wsUrl || DEFAULTS.wsUrl;
+  const eventSource = options.eventSource === "moderation" ? "moderation" : DEFAULTS.eventSource;
   const reconnectInitialDelayMs =
     options.reconnectInitialDelayMs || WEBSOCKET_DEFAULTS.reconnectInitialDelayMs;
-  const reconnectMaxDelayMs =
-    options.reconnectMaxDelayMs || WEBSOCKET_DEFAULTS.reconnectMaxDelayMs;
+  const reconnectMaxDelayMs = options.reconnectMaxDelayMs || WEBSOCKET_DEFAULTS.reconnectMaxDelayMs;
   const reconnectBackoff = options.reconnectBackoff || WEBSOCKET_DEFAULTS.reconnectBackoff;
   const reconnectJitterRatio =
     options.reconnectJitterRatio || WEBSOCKET_DEFAULTS.reconnectJitterRatio;
@@ -67,6 +67,7 @@ export function connectChatSocket(onChatMessage, options = {}) {
       detail,
       reconnectAttempt,
       wsUrl,
+      eventSource,
     });
   }
 
@@ -144,6 +145,12 @@ export function connectChatSocket(onChatMessage, options = {}) {
     ws.onopen = () => {
       clearConnectTimer();
       reconnectAttempt = 0;
+      if (eventSource === "moderation") {
+        setStatus("connected", "Connected to moderation overlay channel");
+        logger.info(`Connected to moderation overlay WebSocket at ${wsUrl}`);
+        return;
+      }
+
       setStatus("connected", "Subscribed to chat events");
       logger.info(`Connected to Streamer.bot WebSocket at ${wsUrl}`);
       subscribeToChatEvents(ws);
@@ -166,7 +173,8 @@ export function connectChatSocket(onChatMessage, options = {}) {
       }
 
       metrics.messagesReceived += 1;
-      const parsed = parseChatEvent(packet);
+      const parsed =
+        eventSource === "moderation" ? parseModerationChatEvent(packet) : parseChatEvent(packet);
       if (!parsed) {
         metrics.messagesDropped += 1;
         emitMetrics();

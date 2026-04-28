@@ -48,6 +48,55 @@ function parseYouTubeEvent(packet) {
   };
 }
 
+function getNormalizedBadges(packet) {
+  const badges = packet?.actor?.badges;
+  if (!Array.isArray(badges)) return [];
+  return badges
+    .map((badge) => {
+      if (typeof badge === "string") return badge;
+      return badge?.imageUrl;
+    })
+    .filter((url) => typeof url === "string");
+}
+
+function normalizePlatform(value) {
+  const source = asDisplayString(value).trim().toLowerCase();
+  if (source === "youtube") return "youtube";
+  return "twitch";
+}
+
+/**
+ * @param {any} packet
+ * @returns {ParsedChatEvent|null}
+ */
+export function parseModerationChatEvent(packet) {
+  if (packet?.type === "chat.message") {
+    const user = packet?.actor?.displayName ?? packet?.actor?.name;
+    const message = packet?.payload?.message;
+    if (user == null || message == null) return null;
+
+    return {
+      user: asDisplayString(user),
+      message: asDisplayString(message),
+      platform: normalizePlatform(packet.source),
+      badges: getNormalizedBadges(packet),
+    };
+  }
+
+  if (packet?.eventType === "overlay.message") {
+    if (packet?.username == null || packet?.text == null) return null;
+
+    return {
+      user: asDisplayString(packet.username),
+      message: asDisplayString(packet.text),
+      platform: normalizePlatform(packet.platform),
+      badges: [],
+    };
+  }
+
+  return null;
+}
+
 /**
  * @param {any} packet
  * @returns {ParsedChatEvent|null}

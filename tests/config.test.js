@@ -21,7 +21,9 @@ describe("getRuntimeConfig", () => {
     const cfg = getRuntimeConfig();
 
     expect(cfg.debug).toBe(true);
+    expect(cfg.eventSource).toBe("streamerbot");
     expect(cfg.wsUrl).toBe("ws://127.0.0.1:9000");
+    expect(cfg.websocket.wsUrl).toBe("ws://127.0.0.1:9000");
     expect(cfg.chat.maxMessages).toBe(12);
   });
 
@@ -31,5 +33,23 @@ describe("getRuntimeConfig", () => {
 
     expect(cfg.wsUrl).toBe("ws://localhost:8080");
     expect(cfg.chat.maxMessages).toBe(10);
+  });
+
+  it("reads moderation event source, overlay websocket url, and demo mode", () => {
+    mockWindow("?eventSource=moderation&overlayWsUrl=ws://127.0.0.1:8787/ws?channel=overlay&demo=true");
+    const cfg = getRuntimeConfig();
+
+    expect(cfg.eventSource).toBe("moderation");
+    expect(cfg.demo).toBe(true);
+    expect(cfg.overlayWsUrl).toBe("ws://127.0.0.1:8787/ws?channel=overlay");
+    expect(cfg.websocket.wsUrl).toBe("ws://127.0.0.1:8787/ws?channel=overlay");
+  });
+
+  it("falls back to streamerbot mode for unknown event source values", () => {
+    mockWindow("?eventSource=unknown&overlayWsUrl=javascript:alert(1)");
+    const cfg = getRuntimeConfig();
+
+    expect(cfg.eventSource).toBe("streamerbot");
+    expect(cfg.overlayWsUrl).toBe("ws://localhost:8787/ws?channel=overlay");
   });
 });

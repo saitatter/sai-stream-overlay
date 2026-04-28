@@ -19,6 +19,8 @@ export const DEFAULTS = {
   msgBgOpacity: "0.6",
   fontFamily: "Poppins",
   wsUrl: "ws://localhost:8080",
+  overlayWsUrl: "ws://localhost:8787/ws?channel=overlay",
+  eventSource: "streamerbot",
 };
 
 export const GAP_PX = 10;

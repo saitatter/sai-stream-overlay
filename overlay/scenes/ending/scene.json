@@ -1,0 +1,17 @@
+{
+  "key": "ending",
+  "label": "Ending",
+  "mode": "webgl-shader",
+  "fragmentShader": "fragment.glsl",
+  "defaults": {
+    "kicker": "Thanks for watching",
+    "title": "Stream Ending",
+    "subtitle": "See you next time.",
+    "countdownEndsAt": "",
+    "parameters": {
+      "accentColor": "#FFB547",
+      "secondaryColor": "#FF5D7A",
+      "intensity": 0.82
+    }
+  }
+}

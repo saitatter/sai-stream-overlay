@@ -1,4 +1,5 @@
 {
+  "name": "sai-stream-overlay",
   "scripts": {
     "lint": "eslint overlay/**/*.js",
     "format": "prettier --write \"overlay/**/*.{js,css,html}\" \"docs/**/*.md\" \"README.md\"",

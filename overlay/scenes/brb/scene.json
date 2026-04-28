@@ -1,0 +1,17 @@
+{
+  "key": "brb",
+  "label": "Be Right Back",
+  "mode": "webgl-shader",
+  "fragmentShader": "fragment.glsl",
+  "defaults": {
+    "kicker": "Intermission",
+    "title": "Be Right Back",
+    "subtitle": "The stream will continue shortly.",
+    "countdownEndsAt": "",
+    "parameters": {
+      "accentColor": "#00D1FF",
+      "secondaryColor": "#7DF2A5",
+      "intensity": 0.76
+    }
+  }
+}

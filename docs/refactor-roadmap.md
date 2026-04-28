@@ -3,6 +3,7 @@
 Status date: 2026-04-23
 
 Progress:
+
 - [x] Task 1 - WebSocket resilience and status
 - [x] Task 2 - Input and payload hardening
 - [x] Task 3 - Config and settings cleanup
@@ -15,6 +16,7 @@ Progress:
 - [x] Task 10 - Documentation
 
 ## Task 1 - WebSocket resilience and status
+
 - Goal: make connection behavior predictable during disconnects/restarts.
 - Scope:
   - Add reconnect jitter to avoid synchronized reconnect spikes.
@@ -26,6 +28,7 @@ Progress:
   - No breaking change for current default `ws://localhost:8080`.
 
 ## Task 2 - Input and payload hardening
+
 - Goal: avoid malformed inputs from breaking rendering.
 - Scope:
   - Clamp message length and username length.
@@ -36,6 +39,7 @@ Progress:
   - Overlay remains stable under malformed events.
 
 ## Task 3 - Config and settings cleanup
+
 - Goal: separate runtime-only config from shareable style config.
 - Scope:
   - Keep `wsUrl` as runtime param only.
@@ -46,6 +50,7 @@ Progress:
   - Config module is single source of truth.
 
 ## Task 4 - Chat lifecycle robustness
+
 - Goal: keep animation smooth during burst traffic.
 - Scope:
   - Optional queue for burst mode.
@@ -56,6 +61,7 @@ Progress:
   - Duplicate message floods are reduced.
 
 ## Task 5 - Animation and CSS cleanup
+
 - Goal: unify timing and motion behavior.
 - Scope:
   - Move timing constants to CSS custom properties where possible.
@@ -66,6 +72,7 @@ Progress:
   - Motion-reduced users get non-intrusive transitions.
 
 ## Task 6 - Code structure polish
+
 - Goal: improve maintainability for future contributors.
 - Scope:
   - Add JSDoc types for packet shapes.
@@ -76,6 +83,7 @@ Progress:
   - File responsibilities are clear.
 
 ## Task 7 - Observability
+
 - Goal: make runtime issues diagnosable without code changes.
 - Scope:
   - Add logger with levels.
@@ -86,6 +94,7 @@ Progress:
   - Normal mode remains quiet.
 
 ## Task 8 - Tooling baseline
+
 - Goal: keep code quality consistent.
 - Scope:
   - Add ESLint and Prettier config.
@@ -96,6 +105,7 @@ Progress:
   - Formatting is deterministic.
 
 ## Task 9 - Tests
+
 - Goal: protect critical behavior from regressions.
 - Scope:
   - Unit tests for parser/config.
@@ -106,6 +116,7 @@ Progress:
   - Reconnect behavior is deterministic under test.
 
 ## Task 10 - Documentation
+
 - Goal: reduce onboarding time and production confusion.
 - Scope:
   - Add architecture section.
