@@ -23,6 +23,17 @@ function safeUrl(value, fallback, allowedProtocols) {
   }
 }
 
+function sendJson(socket, packet, logger) {
+  if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+  try {
+    socket.send(JSON.stringify(packet));
+    return true;
+  } catch (error) {
+    logger.warn("Failed to send overlay runtime packet", error);
+    return false;
+  }
+}
+
 function normalizeInstance(value) {
   const normalized = String(value || DEFAULT_INSTANCE)
     .trim()
@@ -209,7 +220,23 @@ export function createOverlayController({ dom, instance = DEFAULT_INSTANCE, logg
   };
 }
 
-function connect({ wsUrl, controller, logger }) {
+async function restoreResource({ resourceUrl, controller, logger }) {
+  if (!resourceUrl) return false;
+  try {
+    const response = await fetch(resourceUrl, { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const packet = await response.json();
+    const applied =
+      controller.handleEvent(packet) || controller.applyResource(normalizeOverlayResource(packet));
+    if (applied) logger.info(`Restored overlay resource from ${resourceUrl}`);
+    return applied;
+  } catch (error) {
+    logger.warn("Failed to restore overlay resource", error);
+    return false;
+  }
+}
+
+function connect({ wsUrl, resourceUrl, instance, controller, logger }) {
   let reconnectAttempt = 0;
 
   function open() {
@@ -217,6 +244,16 @@ function connect({ wsUrl, controller, logger }) {
     socket.addEventListener("open", () => {
       reconnectAttempt = 0;
       logger.info(`Connected to overlay resource socket at ${wsUrl}`);
+      sendJson(
+        socket,
+        {
+          type: "overlay.resource.request",
+          target: { instance },
+          payload: { instance },
+        },
+        logger,
+      );
+      void restoreResource({ resourceUrl, controller, logger });
     });
     socket.addEventListener("message", (event) => {
       try {
@@ -245,6 +282,7 @@ function start() {
   const demo = readFlag(params, "demo");
   const instance = normalizeInstance(params.get("instance"));
   const overlayWsUrl = safeUrl(params.get("overlayWsUrl"), DEFAULT_OVERLAY_WS_URL, ["ws:", "wss:"]);
+  const resourceUrl = safeUrl(params.get("resourceUrl"), "", ["http:", "https:"]);
   const logger = createLogger("overlay-runtime", debug);
   if (debug) document.body.classList.add("overlay-debug");
 
@@ -257,7 +295,7 @@ function start() {
     },
   });
 
-  connect({ wsUrl: overlayWsUrl, controller, logger });
+  connect({ wsUrl: overlayWsUrl, resourceUrl, instance, controller, logger });
 
   if (demo) {
     controller.applyResource(
