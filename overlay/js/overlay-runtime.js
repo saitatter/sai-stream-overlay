@@ -80,6 +80,20 @@ function normalizeStyle(style = {}) {
   };
 }
 
+function normalizeStylePatch(style = {}) {
+  const input = style && typeof style === "object" ? style : {};
+  const patch = {};
+  if (input.fontFamily != null) patch.fontFamily = safeFontFamily(input.fontFamily);
+  if (input.fontSize != null) patch.fontSize = readNumber(input.fontSize, 32, 6, 240);
+  if (input.color != null) patch.color = safeColor(input.color, "#ffffff");
+  if (input.backgroundColor != null) {
+    patch.backgroundColor = safeColor(input.backgroundColor, "transparent");
+  }
+  if (input.opacity != null) patch.opacity = readNumber(input.opacity, 1, 0, 1);
+  if (input.borderRadius != null) patch.borderRadius = readNumber(input.borderRadius, 0, 0, 240);
+  return patch;
+}
+
 function normalizeNode(node = {}, index = 0) {
   if (!node || typeof node !== "object") return null;
   const type = ["label", "panel", "shader"].includes(node.type) ? node.type : "label";
@@ -94,6 +108,23 @@ function normalizeNode(node = {}, index = 0) {
     height: readNumber(node.height, 80, 1),
     style: normalizeStyle(node.style),
   };
+}
+
+function normalizeNodePatch(value = {}) {
+  const patch = {};
+  if (!value || typeof value !== "object") return patch;
+  if (typeof value.type === "string" && ["label", "panel", "shader"].includes(value.type)) {
+    patch.type = value.type;
+  }
+  if (typeof value.text === "string") patch.text = value.text;
+  if (typeof value.binding === "string") patch.binding = value.binding.trim();
+  if (value.x != null) patch.x = readNumber(value.x, 0);
+  if (value.y != null) patch.y = readNumber(value.y, 0);
+  if (value.width != null) patch.width = readNumber(value.width, 240, 1);
+  if (value.height != null) patch.height = readNumber(value.height, 80, 1);
+  if (value.style && typeof value.style === "object")
+    patch.style = normalizeStylePatch(value.style);
+  return patch;
 }
 
 export function normalizeOverlayResource(value = {}) {
@@ -126,18 +157,100 @@ export function normalizeOverlayResourceEvent(packet) {
 export function normalizeOverlayStatePatchEvent(packet) {
   if (!packet || packet.type !== "overlay.state.patch") return null;
   const payload = packet.payload && typeof packet.payload === "object" ? packet.payload : {};
+  if (Array.isArray(payload.patches)) {
+    const patches = payload.patches
+      .map((patch) => normalizeStatePatchPayload(patch, packet.target))
+      .filter((patch) => patch !== null);
+    return patches.length ? patches : null;
+  }
+  return normalizeStatePatchPayload(payload, packet.target);
+}
+
+function normalizeStatePatchPayload(payload, target) {
+  if (!payload || typeof payload !== "object") return null;
   if (typeof payload.path !== "string" || !payload.path.trim()) return null;
+  return {
+    target: {
+      instance: normalizeInstance(target?.instance || payload.target?.instance),
+    },
+    path: payload.path.trim(),
+    value: payload.value == null ? "" : payload.value,
+  };
+}
+
+export function normalizeOverlayStateSnapshotEvent(packet) {
+  if (!packet || packet.type !== "overlay.state.snapshot") return null;
+  const payload = packet.payload && typeof packet.payload === "object" ? packet.payload : {};
   return {
     target: {
       instance: normalizeInstance(packet.target?.instance || payload.target?.instance),
     },
-    path: payload.path.trim(),
-    value: payload.value == null ? "" : String(payload.value),
+    state: structuredCloneSafe(
+      payload.state && typeof payload.state === "object" ? payload.state : {},
+    ),
   };
 }
 
+export function normalizeOverlayNodePatchEvent(packet) {
+  if (!packet || packet.type !== "overlay.node.patch") return null;
+  const payload = packet.payload && typeof packet.payload === "object" ? packet.payload : {};
+  if (typeof payload.nodeId !== "string" || !payload.nodeId.trim()) return null;
+  const patch = payload.patch && typeof payload.patch === "object" ? payload.patch : {};
+  return {
+    target: {
+      instance: normalizeInstance(packet.target?.instance || payload.target?.instance),
+    },
+    nodeId: normalizeNodeId(payload.nodeId, "node"),
+    patch: normalizeNodePatch(patch),
+  };
+}
+
+function structuredCloneSafe(value) {
+  try {
+    return JSON.parse(JSON.stringify(value ?? {}));
+  } catch {
+    return {};
+  }
+}
+
+function pathParts(path) {
+  return String(path || "")
+    .split(".")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function getByPath(source, path) {
+  if (!source || typeof source !== "object") return undefined;
+  if (Object.prototype.hasOwnProperty.call(source, path)) return source[path];
+  return pathParts(path).reduce((value, part) => {
+    if (value && typeof value === "object" && Object.prototype.hasOwnProperty.call(value, part)) {
+      return value[part];
+    }
+    return undefined;
+  }, source);
+}
+
+function setByPath(source, path, value) {
+  const parts = pathParts(path);
+  if (!parts.length) return;
+  let cursor = source;
+  for (const part of parts.slice(0, -1)) {
+    if (!cursor[part] || typeof cursor[part] !== "object") cursor[part] = {};
+    cursor = cursor[part];
+  }
+  cursor[parts[parts.length - 1]] = value;
+}
+
+function asText(value) {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return "";
+}
+
 function nodeText(node, state) {
-  if (node.binding) return state[node.binding] ?? node.text ?? "";
+  if (node.binding) return asText(getByPath(state, node.binding) ?? node.text ?? "");
   return node.text ?? "";
 }
 
@@ -227,10 +340,11 @@ export function createOverlayController({
 
   function applyStatePatch(patch) {
     if (!patch) return false;
+    if (Array.isArray(patch)) return patch.map(applyStatePatch).some(Boolean);
     if (patch.target.instance !== instance) return false;
-    state[patch.path] = patch.value;
+    setByPath(state, patch.path, patch.value);
     for (const element of dom.root.querySelectorAll?.("[data-binding]") || []) {
-      if (element.dataset.binding === patch.path) element.textContent = patch.value;
+      if (element.dataset.binding === patch.path) element.textContent = asText(patch.value);
     }
     dom.status.textContent = `Overlay state: ${patch.path}`;
     report("state-patch", { path: patch.path });
@@ -238,15 +352,57 @@ export function createOverlayController({
     return true;
   }
 
+  function applyStateSnapshot(snapshot) {
+    if (!snapshot) return false;
+    if (snapshot.target.instance !== instance) return false;
+    for (const key of Object.keys(state)) delete state[key];
+    Object.assign(state, structuredCloneSafe(snapshot.state));
+    render();
+    report("state-snapshot");
+    logger.debug("overlay state snapshot applied", snapshot);
+    return true;
+  }
+
+  function applyNodePatch(nodePatch) {
+    if (!nodePatch || !currentResource) return false;
+    if (nodePatch.target.instance !== instance) return false;
+    const nodeIndex = currentResource.nodes.findIndex((node) => node.id === nodePatch.nodeId);
+    if (nodeIndex < 0) return false;
+    currentResource = {
+      ...currentResource,
+      nodes: currentResource.nodes.map((node, index) =>
+        index === nodeIndex
+          ? {
+              ...node,
+              ...nodePatch.patch,
+              id: node.id,
+              type: nodePatch.patch.type || node.type,
+              style: { ...node.style, ...nodePatch.patch.style },
+            }
+          : node,
+      ),
+    };
+    render();
+    report("node-patch", { nodeId: nodePatch.nodeId });
+    logger.debug("overlay node patch applied", nodePatch);
+    return true;
+  }
+
   function handleEvent(packet) {
     const resource = normalizeOverlayResourceEvent(packet);
     if (resource) return applyResource(resource);
+    const snapshot = normalizeOverlayStateSnapshotEvent(packet);
+    if (snapshot) return applyStateSnapshot(snapshot);
+    const nodePatch = normalizeOverlayNodePatchEvent(packet);
+    if (nodePatch) return applyNodePatch(nodePatch);
     return applyStatePatch(normalizeOverlayStatePatchEvent(packet));
   }
 
   return {
     applyResource,
+    applyStateSnapshot,
     applyStatePatch,
+    applyNodePatch,
     handleEvent,
     render,
     report,
