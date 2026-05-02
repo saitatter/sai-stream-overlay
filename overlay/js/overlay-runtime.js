@@ -2,6 +2,10 @@ import { createLogger } from "./logger.js";
 
 const DEFAULT_OVERLAY_WS_URL = "ws://localhost:8787/ws?channel=overlay";
 const DEFAULT_INSTANCE = "main";
+const runtimeId =
+  typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `overlay-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 const SAFE_COLOR_PATTERN = /^#[0-9a-f]{3}([0-9a-f]{3})?$/i;
 const SAFE_FONT_PATTERN = /^[a-z0-9 ,.'"_-]{1,80}$/i;
 
@@ -150,15 +154,41 @@ function applyNodeStyle(element, node, scale) {
   element.style.borderRadius = `${node.style.borderRadius * Math.min(scale.x, scale.y)}px`;
 }
 
-export function createOverlayController({ dom, instance = DEFAULT_INSTANCE, logger }) {
+export function createOverlayController({
+  dom,
+  instance = DEFAULT_INSTANCE,
+  logger,
+  reportStatus = () => {},
+}) {
   let currentResource = null;
+  let statusReporter = reportStatus;
   const state = {};
+
+  function statusPayload(extra = {}) {
+    return {
+      runtimeId,
+      instance,
+      resourceKey: currentResource?.key || "",
+      nodeCount: currentResource?.nodes?.length || 0,
+      timestamp: new Date().toISOString(),
+      ...extra,
+    };
+  }
+
+  function report(lifecycle, extra = {}) {
+    statusReporter({
+      type: "overlay.runtime.status",
+      target: { instance },
+      payload: statusPayload({ lifecycle, ...extra }),
+    });
+  }
 
   function render() {
     dom.root.replaceChildren();
     if (!currentResource) {
       dom.root.classList.add("overlay-idle");
       dom.status.textContent = "Overlay: idle";
+      report("idle");
       return;
     }
 
@@ -183,6 +213,7 @@ export function createOverlayController({ dom, instance = DEFAULT_INSTANCE, logg
 
     dom.root.classList.toggle("overlay-idle", currentResource.nodes.length === 0);
     dom.status.textContent = `Overlay: ${currentResource.key}`;
+    report("rendered");
     logger.debug("overlay resource rendered", currentResource);
   }
 
@@ -202,6 +233,7 @@ export function createOverlayController({ dom, instance = DEFAULT_INSTANCE, logg
       if (element.dataset.binding === patch.path) element.textContent = patch.value;
     }
     dom.status.textContent = `Overlay state: ${patch.path}`;
+    report("state-patch", { path: patch.path });
     logger.debug("overlay state patch applied", patch);
     return true;
   }
@@ -217,6 +249,10 @@ export function createOverlayController({ dom, instance = DEFAULT_INSTANCE, logg
     applyStatePatch,
     handleEvent,
     render,
+    report,
+    setStatusReporter(nextReporter) {
+      statusReporter = typeof nextReporter === "function" ? nextReporter : () => {};
+    },
   };
 }
 
@@ -238,12 +274,21 @@ async function restoreResource({ resourceUrl, controller, logger }) {
 
 function connect({ wsUrl, resourceUrl, instance, controller, logger }) {
   let reconnectAttempt = 0;
+  let activeSocket = null;
+
+  function reportStatus(packet) {
+    sendJson(activeSocket, packet, logger);
+  }
+
+  controller.setStatusReporter?.(reportStatus);
 
   function open() {
     const socket = new WebSocket(wsUrl);
+    activeSocket = socket;
     socket.addEventListener("open", () => {
       reconnectAttempt = 0;
       logger.info(`Connected to overlay resource socket at ${wsUrl}`);
+      controller.report("connected");
       sendJson(
         socket,
         {
@@ -264,6 +309,7 @@ function connect({ wsUrl, resourceUrl, instance, controller, logger }) {
       }
     });
     socket.addEventListener("close", () => {
+      controller.report("disconnected");
       reconnectAttempt += 1;
       const delay = Math.min(12000, 750 * 2 ** reconnectAttempt);
       window.setTimeout(open, delay);
