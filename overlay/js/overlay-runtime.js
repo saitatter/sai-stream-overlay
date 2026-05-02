@@ -2,6 +2,30 @@ import { createLogger } from "./logger.js";
 
 const DEFAULT_OVERLAY_WS_URL = "ws://localhost:8787/ws?channel=overlay";
 const DEFAULT_INSTANCE = "main";
+const MAX_INLINE_SHADER_LENGTH = 50000;
+const vertexShaderSource = `
+attribute vec2 a_position;
+
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
+`;
+const defaultFragmentShaderSource = `
+precision mediump float;
+
+uniform vec2 u_resolution;
+uniform float u_time;
+uniform vec3 u_accent;
+uniform vec3 u_secondary;
+uniform float u_intensity;
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / max(u_resolution, vec2(1.0));
+  float wave = sin((uv.x + u_time * 0.12) * 10.0) * cos((uv.y - u_time * 0.08) * 8.0);
+  vec3 color = mix(u_secondary, u_accent, 0.5 + 0.5 * wave);
+  gl_FragColor = vec4(color * u_intensity, 1.0);
+}
+`;
 const runtimeId =
   typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
     ? crypto.randomUUID()
@@ -94,6 +118,22 @@ function normalizeStylePatch(style = {}) {
   return patch;
 }
 
+function normalizeShader(shader = {}) {
+  const input = shader && typeof shader === "object" ? shader : {};
+  const fragmentShader =
+    typeof input.fragmentShader === "string" &&
+    input.fragmentShader.length <= MAX_INLINE_SHADER_LENGTH
+      ? input.fragmentShader
+      : "";
+  return {
+    fragmentShader,
+    accentColor: safeColor(input.accentColor, "#9146ff"),
+    secondaryColor: safeColor(input.secondaryColor, "#00d1ff"),
+    intensity: readNumber(input.intensity, 0.8, 0, 3),
+    speed: readNumber(input.speed, 1, 0, 5),
+  };
+}
+
 function normalizeNode(node = {}, index = 0) {
   if (!node || typeof node !== "object") return null;
   const type = ["label", "panel", "shader"].includes(node.type) ? node.type : "label";
@@ -107,6 +147,7 @@ function normalizeNode(node = {}, index = 0) {
     width: readNumber(node.width, 240, 1),
     height: readNumber(node.height, 80, 1),
     style: normalizeStyle(node.style),
+    shader: normalizeShader(node.shader),
   };
 }
 
@@ -124,6 +165,8 @@ function normalizeNodePatch(value = {}) {
   if (value.height != null) patch.height = readNumber(value.height, 80, 1);
   if (value.style && typeof value.style === "object")
     patch.style = normalizeStylePatch(value.style);
+  if (value.shader && typeof value.shader === "object")
+    patch.shader = normalizeShader(value.shader);
   return patch;
 }
 
@@ -249,6 +292,140 @@ function asText(value) {
   return "";
 }
 
+function hexToVec3(hex, fallback) {
+  if (typeof hex !== "string") return fallback;
+  const match = hex.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (!match) return fallback;
+  let value = match[1];
+  if (value.length === 3)
+    value = value
+      .split("")
+      .map((part) => part + part)
+      .join("");
+  const number = Number.parseInt(value, 16);
+  return [((number >> 16) & 255) / 255, ((number >> 8) & 255) / 255, (number & 255) / 255];
+}
+
+function createShader(gl, type, source) {
+  const shader = gl.createShader(type);
+  if (!shader) throw new Error("Failed to create shader.");
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    const message = gl.getShaderInfoLog(shader) || "Shader compilation failed.";
+    gl.deleteShader(shader);
+    throw new Error(message);
+  }
+  return shader;
+}
+
+function createProgram(gl, fragmentShaderSource) {
+  const program = gl.createProgram();
+  if (!program) throw new Error("Failed to create shader program.");
+  let vertexShader = null;
+  let fragmentShader = null;
+  try {
+    vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+    fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      throw new Error(gl.getProgramInfoLog(program) || "Shader linking failed.");
+    }
+    return program;
+  } catch (error) {
+    gl.deleteProgram(program);
+    throw error;
+  } finally {
+    if (vertexShader) gl.deleteShader(vertexShader);
+    if (fragmentShader) gl.deleteShader(fragmentShader);
+  }
+}
+
+function createShaderRenderer(canvas, node, logger) {
+  const gl = canvas.getContext("webgl", { alpha: true, premultipliedAlpha: false });
+  if (!gl) throw new Error("WebGL is unavailable.");
+  const program = createProgram(gl, node.shader.fragmentShader || defaultFragmentShaderSource);
+  const positionBuffer = gl.createBuffer();
+  const startedAt = performance.now();
+  let animationFrame = 0;
+  let stopped = false;
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),
+    gl.STATIC_DRAW,
+  );
+
+  const locations = {
+    position: gl.getAttribLocation(program, "a_position"),
+    resolution: gl.getUniformLocation(program, "u_resolution"),
+    time: gl.getUniformLocation(program, "u_time"),
+    accent: gl.getUniformLocation(program, "u_accent"),
+    secondary: gl.getUniformLocation(program, "u_secondary"),
+    intensity: gl.getUniformLocation(program, "u_intensity"),
+  };
+  const accent = hexToVec3(node.shader.accentColor, [0.57, 0.27, 1]);
+  const secondary = hexToVec3(node.shader.secondaryColor, [0, 0.82, 1]);
+
+  function resize() {
+    const pixelRatio = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+    const width = Math.max(1, Math.floor(canvas.clientWidth * pixelRatio));
+    const height = Math.max(1, Math.floor(canvas.clientHeight * pixelRatio));
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+      gl.viewport(0, 0, width, height);
+    }
+  }
+
+  function render() {
+    if (stopped) return;
+    resize();
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.useProgram(program);
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.enableVertexAttribArray(locations.position);
+    gl.vertexAttribPointer(locations.position, 2, gl.FLOAT, false, 0, 0);
+    gl.uniform2f(locations.resolution, canvas.width, canvas.height);
+    gl.uniform1f(locations.time, ((performance.now() - startedAt) / 1000) * node.shader.speed);
+    gl.uniform3fv(locations.accent, accent);
+    gl.uniform3fv(locations.secondary, secondary);
+    gl.uniform1f(locations.intensity, node.shader.intensity);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    animationFrame = requestAnimationFrame(render);
+  }
+
+  animationFrame = requestAnimationFrame(render);
+  logger.debug("overlay shader node started", node.id);
+
+  return {
+    stop() {
+      stopped = true;
+      cancelAnimationFrame(animationFrame);
+      gl.deleteProgram(program);
+      if (positionBuffer) gl.deleteBuffer(positionBuffer);
+    },
+  };
+}
+
+function attachShaderNode(element, node, logger) {
+  const canvas = document.createElement("canvas");
+  canvas.className = "overlay-shader-canvas";
+  element.appendChild(canvas);
+  try {
+    return createShaderRenderer(canvas, node, logger);
+  } catch (error) {
+    element.classList.add("overlay-node-shader-fallback");
+    element.textContent = "";
+    logger.warn("Overlay shader node failed; using fallback.", error);
+    return { stop() {} };
+  }
+}
+
 function nodeText(node, state) {
   if (node.binding) return asText(getByPath(state, node.binding) ?? node.text ?? "");
   return node.text ?? "";
@@ -275,6 +452,7 @@ export function createOverlayController({
 }) {
   let currentResource = null;
   let statusReporter = reportStatus;
+  let shaderRenderers = [];
   const state = {};
 
   function statusPayload(extra = {}) {
@@ -297,6 +475,8 @@ export function createOverlayController({
   }
 
   function render() {
+    for (const renderer of shaderRenderers) renderer.stop();
+    shaderRenderers = [];
     dom.root.replaceChildren();
     if (!currentResource) {
       dom.root.classList.add("overlay-idle");
@@ -321,6 +501,10 @@ export function createOverlayController({
       element.dataset.binding = node.binding || "";
       element.textContent = node.type === "panel" ? "" : nodeText(node, state);
       applyNodeStyle(element, node, scale);
+      if (node.type === "shader") {
+        element.textContent = "";
+        shaderRenderers.push(attachShaderNode(element, node, logger));
+      }
       dom.root.appendChild(element);
     }
 
