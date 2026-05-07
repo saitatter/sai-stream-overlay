@@ -27,6 +27,7 @@ _(Add a short demo gif here for instant context)_
 - 🔌 Streamer.bot integration (Twitch `ChatMessage`, YouTube `Message`)
 - 🎬 Scene overlay runtime with versioned manifests and WebGL shader presets
 - 🚨 Alert overlay runtime for donations and generic alert events
+- 🧩 Resource overlay runtime for WYSIWYG labels and panels from SAI Showrunner
 - 🔁 Auto-reconnect with exponential backoff if WebSocket disconnects
 - 🐳 Docker image on GHCR (`latest` for amd64, version tags are multi-arch)
 
@@ -89,6 +90,176 @@ handles:
 - `alert.update`
 - `alert.end`
 
+### Resource overlay mode
+
+Resource overlays render WYSIWYG labels and panels created in SAI Showrunner's
+Overlay Studio:
+
+```text
+http://localhost:8080/overlay/overlay.html?instance=main&overlayWsUrl=ws%3A%2F%2Flocalhost%3A8787%2Fws%3Fchannel%3Doverlay
+```
+
+Use `&demo=true` to preview a sample lower-third without a backend. The runtime
+handles:
+
+- `overlay.resource.updated`
+- `overlay.state.patch`
+- `overlay.state.snapshot`
+- `overlay.node.patch`
+- `overlay.runtime.status`
+
+Example:
+
+```json
+{
+  "type": "overlay.resource.updated",
+  "target": {
+    "instance": "main"
+  },
+  "payload": {
+    "overlayKey": "main-alerts",
+    "resource": {
+      "key": "main-alerts",
+      "name": "Main Alerts",
+      "target": {
+        "instance": "main"
+      },
+      "size": {
+        "width": 1920,
+        "height": 1080
+      },
+      "nodes": [
+        {
+          "id": "latest-follower-label",
+          "type": "label",
+          "text": "Latest follower",
+          "binding": "platform.twitch.latestFollower.displayName",
+          "x": 96,
+          "y": 820,
+          "width": 520,
+          "height": 72,
+          "style": {
+            "fontSize": 42,
+            "color": "#ffffff",
+            "backgroundColor": "#000000",
+            "opacity": 0
+          }
+        },
+        {
+          "id": "ambient-shader",
+          "type": "shader",
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080,
+          "shader": {
+            "accentColor": "#9146FF",
+            "secondaryColor": "#00D1FF",
+            "intensity": 0.8,
+            "speed": 1
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+After a resource is loaded, Showrunner can update bound labels without sending
+the full overlay again:
+
+```json
+{
+  "type": "overlay.state.patch",
+  "target": {
+    "instance": "main"
+  },
+  "payload": {
+    "path": "platform.twitch.latestFollower.displayName",
+    "value": "ViewerName"
+  }
+}
+```
+
+For initial OBS restore, Showrunner can either respond to the runtime's
+client-to-server request:
+
+```json
+{
+  "type": "overlay.resource.request",
+  "target": {
+    "instance": "main"
+  },
+  "payload": {
+    "instance": "main"
+  }
+}
+```
+
+Or the Browser Source can include a `resourceUrl` query parameter pointing at an
+HTTP endpoint that returns either the raw resource or an
+`overlay.resource.updated` packet.
+
+State snapshots replace the current overlay state and support nested bindings:
+
+```json
+{
+  "type": "overlay.state.snapshot",
+  "target": {
+    "instance": "main"
+  },
+  "payload": {
+    "state": {
+      "platform": {
+        "twitch": {
+          "latestFollower": {
+            "displayName": "ViewerName"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Node patches update layout/content/style for one resource node without
+republishing the full resource:
+
+```json
+{
+  "type": "overlay.node.patch",
+  "target": {
+    "instance": "main"
+  },
+  "payload": {
+    "nodeId": "latest-follower-label",
+    "patch": {
+      "text": "Latest follower: ViewerName",
+      "style": {
+        "color": "#ffffff"
+      }
+    }
+  }
+}
+```
+
+The runtime reports health back over the same WebSocket when the hub accepts
+client-to-server frames:
+
+```json
+{
+  "type": "overlay.runtime.status",
+  "target": {
+    "instance": "main"
+  },
+  "payload": {
+    "lifecycle": "rendered",
+    "resourceKey": "main-alerts",
+    "nodeCount": 2
+  }
+}
+```
+
 Scene events are consumed from the overlay WebSocket channel:
 
 ```json
@@ -128,23 +299,24 @@ hub accepts client-to-server messages, and also dispatches a local
 
 ## ⚙️ Configuration (URL params)
 
-| Param            | Type    | Default                                  | Example                                  | Notes                                                                          |
-| ---------------- | ------- | ---------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------ |
-| `edit`           | bool    | `false`                                  | `true`                                   | Shows settings panel                                                           |
-| `twitchColor`    | hex     | `#9146FF`                                | `%239146FF`                              | URL-encode `#` as `%23`                                                        |
-| `youtubeColor`   | hex     | `#FF0000`                                | `%23FF0000`                              | —                                                                              |
-| `msgBgColor`     | hex     | `#000000`                                | `%23000000`                              | Combined with `msgBgOpacity`                                                   |
-| `msgBgOpacity`   | 0–1     | `0.6`                                    | `0.8`                                    | Final bg: `rgba(color, opacity)`                                               |
-| `fadeTime`       | seconds | `8`                                      | `12`                                     | Message lifetime                                                               |
-| `fontFamily`     | string  | `Poppins`                                | `Roboto`                                 | Must exist in the internal Google Fonts list                                   |
-| `wsUrl`          | ws/wss  | `ws://localhost:8080`                    | `ws://127.0.0.1:8080`                    | Runtime endpoint; not included by Copy URL                                     |
-| `eventSource`    | string  | `streamerbot`                            | `moderation`                             | `streamerbot` connects directly; `moderation` consumes approved overlay events |
-| `overlayWsUrl`   | ws/wss  | `ws://localhost:8787/ws?channel=overlay` | `ws://127.0.0.1:8787/ws?channel=overlay` | Moderation overlay channel endpoint                                            |
-| `demo`           | bool    | `false`                                  | `true`                                   | Emits sample moderation events locally                                         |
-| `sceneApiUrl`    | http(s) | `http://localhost:8787`                  | `http://127.0.0.1:8787`                  | Scene overlay restore endpoint                                                 |
-| `sceneAssetBase` | path    | `scenes`                                 | `scenes`                                 | Scene definition directory relative to `scene.html`                            |
-| `maxMessages`    | number  | `10`                                     | `15`                                     | Max visible chat bubbles (1..50)                                               |
-| `debug`          | bool    | `false`                                  | `true`                                   | Enables verbose debug logging/metrics                                          |
+| Param            | Type    | Default                                  | Example                                   | Notes                                                                          |
+| ---------------- | ------- | ---------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------ |
+| `edit`           | bool    | `false`                                  | `true`                                    | Shows settings panel                                                           |
+| `twitchColor`    | hex     | `#9146FF`                                | `%239146FF`                               | URL-encode `#` as `%23`                                                        |
+| `youtubeColor`   | hex     | `#FF0000`                                | `%23FF0000`                               | —                                                                              |
+| `msgBgColor`     | hex     | `#000000`                                | `%23000000`                               | Combined with `msgBgOpacity`                                                   |
+| `msgBgOpacity`   | 0–1     | `0.6`                                    | `0.8`                                     | Final bg: `rgba(color, opacity)`                                               |
+| `fadeTime`       | seconds | `8`                                      | `12`                                      | Message lifetime                                                               |
+| `fontFamily`     | string  | `Poppins`                                | `Roboto`                                  | Must exist in the internal Google Fonts list                                   |
+| `wsUrl`          | ws/wss  | `ws://localhost:8080`                    | `ws://127.0.0.1:8080`                     | Runtime endpoint; not included by Copy URL                                     |
+| `eventSource`    | string  | `streamerbot`                            | `moderation`                              | `streamerbot` connects directly; `moderation` consumes approved overlay events |
+| `overlayWsUrl`   | ws/wss  | `ws://localhost:8787/ws?channel=overlay` | `ws://127.0.0.1:8787/ws?channel=overlay`  | Moderation overlay channel endpoint                                            |
+| `demo`           | bool    | `false`                                  | `true`                                    | Emits sample moderation events locally                                         |
+| `resourceUrl`    | http(s) | —                                        | `http://127.0.0.1:8787/api/overlays/main` | Optional resource restore endpoint for `overlay/overlay.html`                  |
+| `sceneApiUrl`    | http(s) | `http://localhost:8787`                  | `http://127.0.0.1:8787`                   | Scene overlay restore endpoint                                                 |
+| `sceneAssetBase` | path    | `scenes`                                 | `scenes`                                  | Scene definition directory relative to `scene.html`                            |
+| `maxMessages`    | number  | `10`                                     | `15`                                      | Max visible chat bubbles (1..50)                                               |
+| `debug`          | bool    | `false`                                  | `true`                                    | Enables verbose debug logging/metrics                                          |
 
 ---
 
@@ -185,6 +357,8 @@ Then open:
 - `overlay/js/chat.js`: message queue, DOM rendering, overflow compaction.
 - `overlay/js/animations.js`: coordinated remove/shift animations.
 - `overlay/js/config.js`: runtime config parsing (`wsUrl`, `maxMessages`, `debug`).
+- `overlay/overlay.html`: WYSIWYG resource overlay entrypoint.
+- `overlay/js/overlay-runtime.js`: Overlay Studio resource renderer.
 - `overlay/scene.html`: scene overlay entrypoint.
 - `overlay/js/scene-runtime.js`: scene event client, scene definition loader, and WebGL runtime.
 - `overlay/scenes/*`: versioned scene manifests and shader assets.
